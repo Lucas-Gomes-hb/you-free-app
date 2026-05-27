@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsService {
   static const String _apiUrlKey = 'api_url';
   static const String _autoDownloadLimitKey = 'auto_download_limit';
-  static const String defaultUrl = 'http://100.125.151.88:8000';
+  static const String defaultUrl = 'http://localhost:8000';
   static const int defaultAutoDownloadLimit = 250;
 
   String _apiUrl = defaultUrl;
