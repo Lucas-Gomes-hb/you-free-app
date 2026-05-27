@@ -3,6 +3,7 @@ import '../../data/models/video_model.dart';
 import '../../data/models/collection_model.dart';
 import '../../data/repositories/video_repository.dart';
 import '../../data/services/history_service.dart';
+import '../../data/services/search_history_service.dart';
 
 part 'home_controller.g.dart';
 
@@ -13,6 +14,7 @@ class HomeController = _HomeController with _$HomeController;
 abstract class _HomeController with Store {
   final VideoRepository _repository;
   final HistoryService _historyService;
+  final SearchHistoryService _searchHistoryService = SearchHistoryService();
 
   _HomeController(this._repository, this._historyService);
 
@@ -66,6 +68,8 @@ abstract class _HomeController with Store {
   Future<void> search() async {
     if (searchQuery.trim().isEmpty) return;
 
+    await _searchHistoryService.add(searchQuery.trim());
+
     isLoading = true;
     errorMessage = null;
     videos.clear();
@@ -103,6 +107,8 @@ abstract class _HomeController with Store {
   Future<void> searchChannels() async {
     if (searchQuery.trim().isEmpty) return;
 
+    await _searchHistoryService.add(searchQuery.trim());
+
     isLoading = true;
     errorMessage = null;
     videos.clear();
@@ -122,6 +128,8 @@ abstract class _HomeController with Store {
   @action
   Future<void> searchPlaylists() async {
     if (searchQuery.trim().isEmpty) return;
+
+    await _searchHistoryService.add(searchQuery.trim());
 
     isLoading = true;
     errorMessage = null;
@@ -194,5 +202,15 @@ abstract class _HomeController with Store {
 
   Future<List<String>> getSearchSuggestions(String query) async {
     return await _repository.getSearchSuggestions(query);
+  }
+
+  /// Returns history entries matching [prefix], for local autocomplete.
+  Future<List<String>> getSearchHistory(String prefix) async {
+    return await _searchHistoryService.getMatching(prefix);
+  }
+
+  /// Removes a single entry from the local search history.
+  Future<void> deleteSearchHistoryEntry(String query) async {
+    await _searchHistoryService.remove(query);
   }
 }

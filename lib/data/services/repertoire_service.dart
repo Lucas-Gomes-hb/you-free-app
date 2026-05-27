@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/video_model.dart';
 import 'download_manager.dart';
 import 'playlist_service.dart';
+import 'settings_service.dart';
 
 class RepertoireEntry {
   final String videoId;
@@ -44,19 +45,22 @@ class RepertoireEntry {
   }
 }
 
-/// Maintains a rolling list of up to 100 short tracks (≤ 6 min) that are
-/// auto-downloaded for offline listening. Evicts the least-played entry when full.
+/// Maintains a rolling list of tracks that are auto-downloaded for offline
+/// listening. When the limit is reached the least-played + oldest entry is
+/// evicted and its file deleted from disk (unless manually downloaded by user).
 class RepertoireService extends ChangeNotifier {
   static const _key = 'yf_repertoire';
-  static const _maxItems = 100;
   static const _maxDurationSecs = 360; // 6 minutes
 
   final PlaylistService _playlistService;
+  final SettingsService _settingsService;
   final List<RepertoireEntry> _entries = [];
 
-  RepertoireService(this._playlistService) {
+  RepertoireService(this._playlistService, this._settingsService) {
     _load();
   }
+
+  int get _maxItems => _settingsService.autoDownloadLimit;
 
   List<RepertoireEntry> get entries => List.unmodifiable(_entries);
 
@@ -78,7 +82,7 @@ class RepertoireService extends ChangeNotifier {
       );
     } else {
       if (_entries.length >= _maxItems) {
-        _evictOne();
+        _evictOne(downloadManager);
       }
       _entries.add(RepertoireEntry(
         videoId: video.id,
@@ -100,14 +104,20 @@ class RepertoireService extends ChangeNotifier {
     await _playlistService.addTrack(playlist.id, video);
   }
 
-  void _evictOne() {
+  /// Evicts the least-played (+ oldest) entry and deletes its file from disk,
+  /// unless the user manually downloaded it.
+  void _evictOne(DownloadManager downloadManager) {
     if (_entries.isEmpty) return;
     // Sort ascending: fewest plays first, then oldest play date as tiebreaker
     _entries.sort((a, b) {
       final cmp = a.playCount.compareTo(b.playCount);
       return cmp != 0 ? cmp : a.lastPlayedAt.compareTo(b.lastPlayedAt);
     });
-    _entries.removeAt(0);
+    final evicted = _entries.removeAt(0);
+    // Only delete from disk if NOT a manual download by the user
+    if (!downloadManager.isManualDownload(evicted.videoId)) {
+      downloadManager.delete(evicted.videoId);
+    }
   }
 
   Future<void> _load() async {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:mobx/mobx.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../controllers/home_controller.dart';
@@ -10,6 +11,16 @@ import '../components/video_card.dart';
 import '../components/channel_card.dart';
 import '../../data/models/video_model.dart';
 import '../../data/models/collection_model.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Small helper to distinguish local-history items from remote suggestions
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SuggestionItem {
+  final String text;
+  final bool isHistory;
+  const _SuggestionItem(this.text, this.isHistory);
+}
 
 class HomePage extends StatefulWidget {
   final HomeController controller;
@@ -41,9 +52,14 @@ class _HomePageState extends State<HomePage> {
   int _feedSeedIndex = 0;
   final _feedScrollController = ScrollController();
 
-  List<String> _suggestions = [];
+  // ── Suggestions ──────────────────────────────────────────────────────────
+  List<String> _ytSuggestions = [];   // remote YouTube suggestions
+  List<String> _historyMatches = [];  // local search history
   bool _showSuggestions = false;
   Timer? _suggestDebounce;
+  ReactionDisposer? _searchQueryReaction;
+  // ─────────────────────────────────────────────────────────────────────────
+
   final _searchScrollController = ScrollController();
 
   @override
@@ -57,6 +73,22 @@ class _HomePageState extends State<HomePage> {
     _feedScrollController.addListener(_onFeedScroll);
     _searchScrollController.addListener(_onSearchScroll);
     _loadHomeFeed();
+
+    // Sync the text field when the controller's query is cleared externally
+    // (e.g. by tapping the Home tab in the bottom nav).
+    _searchQueryReaction = reaction(
+      (_) => widget.controller.searchQuery,
+      (String q) {
+        if (q.isEmpty && _searchController.text.isNotEmpty && mounted) {
+          _searchController.clear();
+          setState(() {
+            _ytSuggestions = [];
+            _historyMatches = [];
+            _showSuggestions = false;
+          });
+        }
+      },
+    );
   }
 
   void _onSearchScroll() {
@@ -116,6 +148,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _suggestDebounce?.cancel();
+    _searchQueryReaction?.call();
     _feedScrollController.dispose();
     _searchScrollController.dispose();
     _searchController.dispose();
@@ -123,29 +156,73 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  // ── Suggestions logic ───────────────────────────────────────────────────
+
   void _onSearchChanged(String query) {
     widget.controller.setSearchQuery(query);
     _suggestDebounce?.cancel();
-    if (query.trim().length < 2 || _isUrlOrHandle(query)) {
-      if (mounted) setState(() { _suggestions = []; _showSuggestions = false; });
+
+    if (_isUrlOrHandle(query)) {
+      if (mounted) {
+        setState(() {
+          _ytSuggestions = [];
+          _historyMatches = [];
+          _showSuggestions = false;
+        });
+      }
       return;
     }
+
+    // Load local history immediately for any non-empty query
+    if (query.trim().isNotEmpty) {
+      _loadHistoryMatches(query.trim());
+    } else {
+      if (mounted) setState(() { _historyMatches = []; _showSuggestions = false; });
+      return;
+    }
+
+    // Fetch remote YouTube suggestions for queries ≥ 2 chars
+    if (query.trim().length < 2) return;
+
     _suggestDebounce = Timer(const Duration(milliseconds: 300), () async {
       final results = await widget.controller.getSearchSuggestions(query.trim());
       if (mounted && _focusNode.hasFocus) {
         setState(() {
-          _suggestions = results;
-          _showSuggestions = results.isNotEmpty;
+          _ytSuggestions = results;
+          _showSuggestions = _historyMatches.isNotEmpty || results.isNotEmpty;
         });
       }
     });
+  }
+
+  Future<void> _loadHistoryMatches(String prefix) async {
+    final history = await widget.controller.getSearchHistory(prefix);
+    if (mounted && _focusNode.hasFocus) {
+      setState(() {
+        _historyMatches = history;
+        _showSuggestions = history.isNotEmpty || _ytSuggestions.isNotEmpty;
+      });
+    }
+  }
+
+  List<_SuggestionItem> get _combinedSuggestions {
+    final historySet = _historyMatches.toSet();
+    final ytOnly = _ytSuggestions.where((s) => !historySet.contains(s)).toList();
+    return [
+      ..._historyMatches.map((s) => _SuggestionItem(s, true)),
+      ...ytOnly.map((s) => _SuggestionItem(s, false)),
+    ];
   }
 
   void _applySuggestion(String suggestion) {
     _searchController.text = suggestion;
     _searchController.selection = TextSelection.collapsed(offset: suggestion.length);
     widget.controller.setSearchQuery(suggestion);
-    setState(() { _suggestions = []; _showSuggestions = false; });
+    setState(() {
+      _ytSuggestions = [];
+      _historyMatches = [];
+      _showSuggestions = false;
+    });
     _focusNode.unfocus();
     _handleSearch();
   }
@@ -203,7 +280,12 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // ── Suggestions overlay ────────────────────────────────────────────────
+
   Widget _buildSuggestionsOverlay() {
+    final items = _combinedSuggestions;
+    if (items.isEmpty) return const SizedBox.shrink();
+
     return Positioned(
       top: 0,
       left: 0,
@@ -219,32 +301,56 @@ class _HomePageState extends State<HomePage> {
           shrinkWrap: true,
           padding: const EdgeInsets.symmetric(vertical: 4),
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: _suggestions.length,
+          itemCount: items.length,
           separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFF2A2A2A), indent: 48),
           itemBuilder: (_, i) {
-            final s = _suggestions[i];
+            final item = items[i];
             return InkWell(
-              onTap: () => _applySuggestion(s),
+              onTap: () => _applySuggestion(item.text),
               borderRadius: BorderRadius.circular(6),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                 child: Row(
                   children: [
-                    Icon(Icons.search_rounded, size: 16, color: Colors.grey[600]),
+                    Icon(
+                      item.isHistory ? Icons.history_rounded : Icons.search_rounded,
+                      size: 16,
+                      color: item.isHistory ? Colors.grey[500] : Colors.grey[600],
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(s,
-                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w400)),
+                      child: Text(
+                        item.text,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        _searchController.text = s;
-                        _searchController.selection = TextSelection.collapsed(offset: s.length);
-                        widget.controller.setSearchQuery(s);
-                        setState(() { _suggestions = []; _showSuggestions = false; });
-                      },
-                      child: Icon(Icons.north_west_rounded, size: 15, color: Colors.grey[700]),
-                    ),
+                    if (item.isHistory)
+                      GestureDetector(
+                        onTap: () {
+                          widget.controller.deleteSearchHistoryEntry(item.text);
+                          setState(() => _historyMatches.remove(item.text));
+                        },
+                        child: Icon(Icons.close_rounded, size: 15, color: Colors.grey[700]),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: () {
+                          _searchController.text = item.text;
+                          _searchController.selection =
+                              TextSelection.collapsed(offset: item.text.length);
+                          widget.controller.setSearchQuery(item.text);
+                          setState(() {
+                            _ytSuggestions = [];
+                            _historyMatches = [];
+                            _showSuggestions = false;
+                          });
+                        },
+                        child: Icon(Icons.north_west_rounded, size: 15, color: Colors.grey[700]),
+                      ),
                   ],
                 ),
               ),
@@ -255,7 +361,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // -------------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -291,7 +397,7 @@ class _HomePageState extends State<HomePage> {
                     child: Stack(
                       children: [
                         _buildBody(),
-                        if (_showSuggestions && _suggestions.isNotEmpty)
+                        if (_showSuggestions)
                           _buildSuggestionsOverlay(),
                       ],
                     ),
@@ -306,28 +412,60 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 8, 0),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.asset('assets/youfree.png', width: 34, height: 34),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'YouFree',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5),
+    return Observer(builder: (_) {
+      final hasSearch = widget.controller.searchQuery.isNotEmpty;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 8, 0),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: hasSearch
+                  ? () {
+                      _searchController.clear();
+                      widget.controller.clearSearch();
+                      _focusNode.unfocus();
+                    }
+                  : null,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset('assets/youfree.png', width: 34, height: 34),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'YouFree',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: Icon(Icons.settings_rounded, color: Colors.grey[600], size: 22),
-            onPressed: widget.onSettings,
-          ),
-        ],
-      ),
-    );
+            const Spacer(),
+            if (hasSearch)
+              IconButton(
+                icon: Icon(Icons.close_rounded, color: Colors.grey[500], size: 22),
+                onPressed: () {
+                  _searchController.clear();
+                  widget.controller.clearSearch();
+                  _focusNode.unfocus();
+                },
+                tooltip: 'Limpar pesquisa',
+              )
+            else
+              IconButton(
+                icon: Icon(Icons.settings_rounded, color: Colors.grey[600], size: 22),
+                onPressed: widget.onSettings,
+              ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildSearchBar() {
@@ -363,7 +501,11 @@ class _HomePageState extends State<HomePage> {
           ),
           onChanged: _onSearchChanged,
           onSubmitted: (_) {
-            setState(() { _suggestions = []; _showSuggestions = false; });
+            setState(() {
+              _ytSuggestions = [];
+              _historyMatches = [];
+              _showSuggestions = false;
+            });
             _handleSearch();
           },
         ),
@@ -400,9 +542,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Body
-  // -------------------------------------------------------------------------
+  // ── Body ─────────────────────────────────────────────────────────────────
 
   Widget _buildBody() {
     return Observer(builder: (_) {
@@ -422,9 +562,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // -------------------------------------------------------------------------
-  // Home screen — YouTube Music-style layout
-  // -------------------------------------------------------------------------
+  // ── Home screen ──────────────────────────────────────────────────────────
 
   Widget _buildHomeScreen() {
     return Observer(builder: (_) {
@@ -436,7 +574,6 @@ class _HomePageState extends State<HomePage> {
       return CustomScrollView(
         controller: _feedScrollController,
         slivers: [
-          // Recentemente ouvidas — grid completo sem cap
           if (history.isNotEmpty) ...[
             SliverToBoxAdapter(child: _sectionHeader('Recentemente ouvidas')),
             SliverPadding(
@@ -466,7 +603,6 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
 
-          // Para você
           if (_homeFeedLoading || _homeFeed.isNotEmpty) ...[
             SliverToBoxAdapter(child: _sectionHeader('Para você')),
             if (_homeFeedLoading && _homeFeed.isEmpty)
@@ -508,7 +644,6 @@ class _HomePageState extends State<HomePage> {
               ),
           ],
 
-          // Spinner de carregando mais
           SliverToBoxAdapter(
             child: _loadingMore
                 ? const Padding(
@@ -545,9 +680,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Search results
-  // -------------------------------------------------------------------------
+  // ── Search results ───────────────────────────────────────────────────────
 
   Widget _buildResults() {
     return Observer(builder: (_) {
@@ -680,9 +813,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Empty / error
-  // -------------------------------------------------------------------------
+  // ── Empty / error ────────────────────────────────────────────────────────
 
   Widget _buildEmpty() {
     final hasQuery = widget.controller.searchQuery.isNotEmpty;
@@ -788,7 +919,7 @@ class _Chip extends StatelessWidget {
 }
 
 // =============================================================================
-// Quick-play tile — compact 2-column grid tile for recent plays
+// Quick-play tile
 // =============================================================================
 
 class _QuickPlayTile extends StatelessWidget {
@@ -812,7 +943,6 @@ class _QuickPlayTile extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Row(
           children: [
-            // Album art
             SizedBox(
               width: 56,
               child: video.thumbnail != null
@@ -825,7 +955,6 @@ class _QuickPlayTile extends StatelessWidget {
                     )
                   : _artPlaceholder(),
             ),
-            // Text
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(10, 0, 8, 0),

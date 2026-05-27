@@ -45,6 +45,7 @@ class AppRouter {
         builder: (context, state, navigationShell) => _MainShell(
           navigationShell: navigationShell,
           playerController: playerController,
+          onHomeTap: () => homeController.clearSearch(),
         ),
         branches: [
           StatefulShellBranch(routes: [
@@ -64,6 +65,7 @@ class AppRouter {
                 playlistService: playlistService,
                 playerController: playerController,
                 videoRepository: videoRepository,
+                downloadManager: downloadManager,
               ),
             ),
           ]),
@@ -100,6 +102,7 @@ class AppRouter {
             playlistService: extra['playlistService'] as PlaylistService,
             playerController: extra['playerController'] as PlayerController,
             videoRepository: extra['videoRepository'] as VideoRepository,
+            downloadManager: extra['downloadManager'] as DownloadManager?,
           );
         },
       ),
@@ -117,10 +120,12 @@ class AppRouter {
 class _MainShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
   final PlayerController playerController;
+  final VoidCallback? onHomeTap;
 
   const _MainShell({
     required this.navigationShell,
     required this.playerController,
+    this.onHomeTap,
   });
 
   @override
@@ -134,10 +139,13 @@ class _MainShell extends StatelessWidget {
           MiniPlayer(controller: playerController),
           BottomNavigationBar(
             currentIndex: navigationShell.currentIndex,
-            onTap: (i) => navigationShell.goBranch(
-              i,
-              initialLocation: i == navigationShell.currentIndex,
-            ),
+            onTap: (i) {
+              if (i == 0) onHomeTap?.call();
+              navigationShell.goBranch(
+                i,
+                initialLocation: i == navigationShell.currentIndex,
+              );
+            },
             backgroundColor: const Color(0xFF0A0A0A),
             selectedItemColor: const Color(0xFFE8432A),
             unselectedItemColor: const Color(0xFF666666),

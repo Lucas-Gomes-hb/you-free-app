@@ -73,7 +73,7 @@ class _YouFreeAppState extends State<YouFreeApp> {
     _playlistService = PlaylistService();
     _downloadManager = DownloadManager(_apiService, _playlistService);
     _playlistService.load().then((_) => _downloadManager.syncToPlaylists());
-    _repertoireService = RepertoireService(_playlistService);
+    _repertoireService = RepertoireService(_playlistService, widget.settingsService);
     _playerController = PlayerController(
       _videoRepository,
       _historyService,

@@ -6,16 +6,22 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/local_playlist.dart';
 import '../../data/models/video_model.dart';
 import '../../data/services/playlist_service.dart';
+import '../../data/services/download_manager.dart';
 import '../../data/repositories/video_repository.dart';
 import '../components/mini_player.dart';
 import '../components/video_card.dart';
 import '../controllers/player_controller.dart';
 
-class PlaylistDetailPage extends StatelessWidget {
+// Playlist names that hold downloaded tracks — swiping these shows a
+// "remove from playlist" vs "delete file from disk" choice.
+const _kDownloadPlaylistNames = {'Downloads', 'Downloads Automáticos'};
+
+class PlaylistDetailPage extends StatefulWidget {
   final String playlistId;
   final PlaylistService playlistService;
   final PlayerController playerController;
   final VideoRepository videoRepository;
+  final DownloadManager? downloadManager;
 
   const PlaylistDetailPage({
     Key? key,
@@ -23,15 +29,30 @@ class PlaylistDetailPage extends StatelessWidget {
     required this.playlistService,
     required this.playerController,
     required this.videoRepository,
+    this.downloadManager,
   }) : super(key: key);
+
+  @override
+  State<PlaylistDetailPage> createState() => _PlaylistDetailPageState();
+}
+
+class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
+  // Tracks whether "delete from disk" was chosen for the pending swipe dismiss.
+  // Key = videoId, value = true → delete file; false → playlist only.
+  final Map<String, bool> _pendingDelete = {};
+
+  bool _isDownloadsPlaylist(LocalPlaylist playlist) =>
+      _kDownloadPlaylistNames.contains(playlist.name);
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: playlistService,
+      listenable: widget.playlistService,
       builder: (context, _) {
-        final idx = playlistService.playlists.indexWhere((p) => p.id == playlistId);
-        final playlist = idx >= 0 ? playlistService.playlists[idx] : null;
+        final idx = widget.playlistService.playlists
+            .indexWhere((p) => p.id == widget.playlistId);
+        final playlist =
+            idx >= 0 ? widget.playlistService.playlists[idx] : null;
 
         if (playlist == null) {
           return Scaffold(
@@ -40,7 +61,7 @@ class PlaylistDetailPage extends StatelessWidget {
             body: const Center(
                 child: Text('Playlist não encontrada',
                     style: TextStyle(color: Colors.grey))),
-            bottomNavigationBar: MiniPlayer(controller: playerController),
+            bottomNavigationBar: MiniPlayer(controller: widget.playerController),
           );
         }
 
@@ -58,7 +79,7 @@ class PlaylistDetailPage extends StatelessWidget {
               ],
             ),
           ),
-          bottomNavigationBar: MiniPlayer(controller: playerController),
+          bottomNavigationBar: MiniPlayer(controller: widget.playerController),
           floatingActionButton: FloatingActionButton(
             onPressed: () => _showAddTracksSheet(context, playlist),
             backgroundColor: const Color(0xFFE8432A),
@@ -91,6 +112,9 @@ class PlaylistDetailPage extends StatelessWidget {
   }
 
   Widget _buildTrackList(BuildContext context, LocalPlaylist playlist) {
+    final isDl = _isDownloadsPlaylist(playlist);
+    final dm = widget.downloadManager;
+
     return Column(
       children: [
         Padding(
@@ -100,10 +124,11 @@ class PlaylistDetailPage extends StatelessWidget {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () =>
-                      playerController.playFromQueue(playlist.tracks),
+                      widget.playerController.playFromQueue(playlist.tracks),
                   icon: const Icon(Icons.play_arrow_rounded, size: 20),
                   label: const Text('Tocar tudo',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFE8432A),
                     foregroundColor: Colors.white,
@@ -119,11 +144,12 @@ class PlaylistDetailPage extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () {
                     final shuffled = [...playlist.tracks]..shuffle(Random());
-                    playerController.playFromQueue(shuffled);
+                    widget.playerController.playFromQueue(shuffled);
                   },
                   icon: const Icon(Icons.shuffle_rounded, size: 18),
                   label: const Text('Aleatório',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
                     side: const BorderSide(color: Color(0xFF3A3A3A)),
@@ -143,6 +169,9 @@ class PlaylistDetailPage extends StatelessWidget {
             separatorBuilder: (_, __) => const SizedBox(height: 2),
             itemBuilder: (context, i) {
               final video = playlist.tracks[i];
+              final canDeleteFile =
+                  isDl && dm != null && dm.isDownloaded(video.id);
+
               return Dismissible(
                 key: Key('${playlist.id}_${video.id}'),
                 direction: DismissDirection.endToStart,
@@ -153,14 +182,74 @@ class PlaylistDetailPage extends StatelessWidget {
                   child: const Icon(Icons.delete_outline_rounded,
                       color: Colors.white),
                 ),
-                onDismissed: (_) =>
-                    playlistService.removeTrack(playlist.id, video.id),
+                confirmDismiss: (_) async {
+                  if (!canDeleteFile) {
+                    _pendingDelete[video.id] = false;
+                    return true;
+                  }
+
+                  // Downloads playlist with a downloaded file → ask the user
+                  final result = await showDialog<String>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: const Color(0xFF1A1A1A),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      title: const Text('Remover faixa',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700)),
+                      content: Text(
+                        video.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            TextStyle(color: Colors.grey[400], fontSize: 13),
+                      ),
+                      actionsPadding:
+                          const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text('Cancelar',
+                              style: TextStyle(color: Colors.grey[500])),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, 'playlist'),
+                          child: const Text('Só da playlist',
+                              style: TextStyle(color: Colors.white70)),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, 'disk'),
+                          child: const Text('Excluir arquivo',
+                              style: TextStyle(
+                                  color: Color(0xFFE8432A),
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (result == null) return false; // cancelled
+                  _pendingDelete[video.id] = (result == 'disk');
+                  return true;
+                },
+                onDismissed: (_) async {
+                  final deleteFile = _pendingDelete.remove(video.id) ?? false;
+                  if (deleteFile) {
+                    // delete() removes the file AND the track from all playlists
+                    await dm!.delete(video.id);
+                  } else {
+                    await widget.playlistService
+                        .removeTrack(playlist.id, video.id);
+                  }
+                },
                 child: Observer(
                   builder: (_) => VideoCard(
                     video: video,
                     isCurrentlyPlaying:
-                        playerController.isCurrentVideo(video.id),
-                    onTap: () => playerController
+                        widget.playerController.isCurrentVideo(video.id),
+                    onTap: () => widget.playerController
                         .playFromQueue(playlist.tracks.sublist(i)),
                   ),
                 ),
@@ -183,8 +272,8 @@ class PlaylistDetailPage extends StatelessWidget {
       ),
       builder: (ctx) => _AddTracksSheet(
         playlistId: playlist.id,
-        playlistService: playlistService,
-        videoRepository: videoRepository,
+        playlistService: widget.playlistService,
+        videoRepository: widget.videoRepository,
       ),
     );
   }

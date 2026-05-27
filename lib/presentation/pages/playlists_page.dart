@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/local_playlist.dart';
 import '../../data/services/playlist_service.dart';
+import '../../data/services/download_manager.dart';
 import '../../data/repositories/video_repository.dart';
 import '../controllers/player_controller.dart';
 
@@ -10,12 +11,14 @@ class PlaylistsPage extends StatelessWidget {
   final PlaylistService playlistService;
   final PlayerController playerController;
   final VideoRepository videoRepository;
+  final DownloadManager downloadManager;
 
   const PlaylistsPage({
     Key? key,
     required this.playlistService,
     required this.playerController,
     required this.videoRepository,
+    required this.downloadManager,
   }) : super(key: key);
 
   @override
@@ -115,6 +118,7 @@ class PlaylistsPage extends StatelessWidget {
       'playlistService': playlistService,
       'playerController': playerController,
       'videoRepository': videoRepository,
+      'downloadManager': downloadManager,
     });
   }
 

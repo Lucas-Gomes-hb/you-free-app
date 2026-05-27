@@ -29,10 +29,13 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _cookiesClearing = false;
   bool _showCookiesPaste = false;
 
+  late int _autoDownloadLimit;
+
   @override
   void initState() {
     super.initState();
     _urlController = TextEditingController(text: widget.settingsService.apiUrl);
+    _autoDownloadLimit = widget.settingsService.autoDownloadLimit;
     _loadStatus();
   }
 
@@ -120,14 +123,13 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.all(16),
         children: [
           _buildSectionHeader('Servidor'),
-          _buildCard([
-            _buildApiUrlSection(),
-          ]),
+          _buildCard([_buildApiUrlSection()]),
+          const SizedBox(height: 24),
+          _buildSectionHeader('Downloads automáticos'),
+          _buildCard([_buildAutoDownloadSection()]),
           const SizedBox(height: 24),
           _buildSectionHeader('Autenticação YouTube'),
-          _buildCard([
-            _buildCookiesSection(),
-          ]),
+          _buildCard([_buildCookiesSection()]),
           const SizedBox(height: 24),
           _buildDisclaimer(),
           const SizedBox(height: 40),
@@ -135,6 +137,85 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
+
+  // ── Auto-download limit ──────────────────────────────────────────────────
+
+  Widget _buildAutoDownloadSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Limite de músicas',
+                style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600),
+              ),
+            ),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF333333)),
+              ),
+              child: Text(
+                '$_autoDownloadLimit',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SliderTheme(
+          data: SliderThemeData(
+            activeTrackColor: const Color(0xFFE8432A),
+            inactiveTrackColor: const Color(0xFF2A2A2A),
+            thumbColor: const Color(0xFFE8432A),
+            overlayColor: const Color(0xFFE8432A).withValues(alpha: 0.15),
+            trackHeight: 3,
+          ),
+          child: Slider(
+            value: _autoDownloadLimit.toDouble(),
+            min: 50,
+            max: 1000,
+            divisions: 19, // 50-step increments: (1000-50)/50 = 19
+            onChanged: (v) {
+              setState(() => _autoDownloadLimit = v.round());
+            },
+            onChangeEnd: (v) async {
+              final limit = v.round();
+              await widget.settingsService.setAutoDownloadLimit(limit);
+            },
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('50', style: TextStyle(color: Colors.grey[700], fontSize: 11)),
+            Text('1000',
+                style: TextStyle(color: Colors.grey[700], fontSize: 11)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Quando o limite é atingido, a música menos ouvida (e mais antiga) '
+          'é removida automaticamente do disco para dar espaço à nova. '
+          'Downloads manuais não são afetados.',
+          style: TextStyle(color: Colors.grey[600], fontSize: 12, height: 1.5),
+        ),
+      ],
+    );
+  }
+
+  // ── Shared helpers ────────────────────────────────────────────────────────
 
   Widget _buildDisclaimer() {
     return Container(
@@ -430,7 +511,9 @@ class _SettingsPageState extends State<SettingsPage> {
       case 'firefox':
         return 'Usando cookies do Firefox automaticamente';
       default:
-        return hasFirefox ? 'Firefox detectado, mas sem cookies válidos' : 'Sem autenticação — funcionalidades básicas';
+        return hasFirefox
+            ? 'Firefox detectado, mas sem cookies válidos'
+            : 'Sem autenticação — funcionalidades básicas';
     }
   }
 }

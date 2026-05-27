@@ -163,6 +163,46 @@ class DownloadManager extends ChangeNotifier {
     _tokens[videoId]?.cancel('Cancelado pelo usuário');
   }
 
+  bool isManualDownload(String videoId) => _manualIds.contains(videoId);
+
+  /// Deletes a downloaded video: removes the file from disk and clears all
+  /// persisted state. Also removes the track from any downloads playlist.
+  Future<void> delete(String videoId) async {
+    // Cancel any in-progress download first
+    _tokens[videoId]?.cancel('Deletado pelo usuário');
+    _tokens.remove(videoId);
+
+    // Delete file from disk (persisted path)
+    final persistedPath = _persistedPaths[videoId];
+    if (persistedPath != null) {
+      try {
+        final file = File(persistedPath);
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+
+    // Also try in-memory path (may differ from persisted during same session)
+    final memPath = _downloads[videoId]?.localPath;
+    if (memPath != null && memPath != persistedPath) {
+      try {
+        final file = File(memPath);
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+
+    // Clear from in-memory map
+    _downloads.remove(videoId);
+
+    // Persist the removal
+    await _persistAllAsync(addId: videoId, remove: true);
+
+    // Remove from both downloads playlists
+    await _removeFromPlaylist('Downloads', videoId);
+    await _removeFromPlaylist('Downloads Automáticos', videoId);
+
+    notifyListeners();
+  }
+
   /// Ensures all MANUAL downloads appear in the "Downloads" playlist.
   /// Auto-downloads (via RepertoireService) go to "Downloads Automáticos" only.
   /// Call once at startup after PlaylistService.load() has completed.
@@ -198,6 +238,13 @@ class DownloadManager extends ChangeNotifier {
     try {
       final pl = await _playlistService.getOrCreate(playlistName);
       await _playlistService.addTrack(pl.id, video);
+    } catch (_) {}
+  }
+
+  Future<void> _removeFromPlaylist(String playlistName, String videoId) async {
+    try {
+      final pl = _playlistService.playlists.firstWhere((p) => p.name == playlistName);
+      await _playlistService.removeTrack(pl.id, videoId);
     } catch (_) {}
   }
 
