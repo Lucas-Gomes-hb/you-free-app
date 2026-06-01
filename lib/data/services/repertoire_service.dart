@@ -11,20 +11,23 @@ class RepertoireEntry {
   final VideoModel video;
   final DateTime lastPlayedAt;
   final int playCount;
+  final int skipCount;
 
   const RepertoireEntry({
     required this.videoId,
     required this.video,
     required this.lastPlayedAt,
     required this.playCount,
+    this.skipCount = 0,
   });
 
-  RepertoireEntry copyWith({DateTime? lastPlayedAt, int? playCount}) {
+  RepertoireEntry copyWith({DateTime? lastPlayedAt, int? playCount, int? skipCount}) {
     return RepertoireEntry(
       videoId: videoId,
       video: video,
       lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
       playCount: playCount ?? this.playCount,
+      skipCount: skipCount ?? this.skipCount,
     );
   }
 
@@ -33,14 +36,18 @@ class RepertoireEntry {
     'video': video.toJson(),
     'lastPlayedAt': lastPlayedAt.millisecondsSinceEpoch,
     'playCount': playCount,
+    'skipCount': skipCount,
   };
 
   factory RepertoireEntry.fromJson(Map<String, dynamic> json) {
     return RepertoireEntry(
       videoId: json['videoId'] as String,
       video: VideoModel.fromJson(json['video'] as Map<String, dynamic>),
-      lastPlayedAt: DateTime.fromMillisecondsSinceEpoch(json['lastPlayedAt'] as int),
-      playCount: json['playCount'] as int,
+      lastPlayedAt: json['lastPlayedAt'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(json['lastPlayedAt'] as int)
+          : DateTime.now(),
+      playCount: (json['playCount'] as int?) ?? 0,
+      skipCount: (json['skipCount'] as int?) ?? 0,
     );
   }
 }
@@ -104,17 +111,33 @@ class RepertoireService extends ChangeNotifier {
     await _playlistService.addTrack(playlist.id, video);
   }
 
-  /// Evicts the least-played (+ oldest) entry and deletes its file from disk,
-  /// unless the user manually downloaded it.
+  /// Called when the user manually skips a video. Increments the skip count.
+  Future<void> skip(VideoModel video) async {
+    final idx = _entries.indexWhere((e) => e.videoId == video.id);
+    if (idx < 0) return;
+    _entries[idx] = _entries[idx].copyWith(
+      skipCount: _entries[idx].skipCount + 1,
+    );
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Evicts the worst entry: oldest play date first, then lowest net score
+  /// (playCount - skipCount), then alphabetical by title as final tiebreaker.
   void _evictOne(DownloadManager downloadManager) {
     if (_entries.isEmpty) return;
-    // Sort ascending: fewest plays first, then oldest play date as tiebreaker
     _entries.sort((a, b) {
-      final cmp = a.playCount.compareTo(b.playCount);
-      return cmp != 0 ? cmp : a.lastPlayedAt.compareTo(b.lastPlayedAt);
+      final timeCmp = a.lastPlayedAt.compareTo(b.lastPlayedAt);
+      if (timeCmp != 0) return timeCmp;
+
+      final netA = a.playCount - a.skipCount;
+      final netB = b.playCount - b.skipCount;
+      final netCmp = netA.compareTo(netB);
+      if (netCmp != 0) return netCmp;
+
+      return a.video.title.compareTo(b.video.title);
     });
     final evicted = _entries.removeAt(0);
-    // Only delete from disk if NOT a manual download by the user
     if (!downloadManager.isManualDownload(evicted.videoId)) {
       downloadManager.delete(evicted.videoId);
     }

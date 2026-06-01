@@ -421,6 +421,9 @@ abstract class _PlayerController with Store {
       return;
     }
     if (_playHistory.isNotEmpty) {
+      if (currentVideo != null) {
+        _repertoireService.skip(currentVideo!);
+      }
       await _loadStreamOnly(_playHistory.removeLast());
     } else {
       await seek(Duration.zero);
@@ -512,6 +515,9 @@ abstract class _PlayerController with Store {
 
   @action
   Future<void> skipToNext() async {
+    if (currentVideo != null) {
+      _repertoireService.skip(currentVideo!);
+    }
     if (suggestions.isNotEmpty) await advanceInQueue(suggestions.first);
   }
 
