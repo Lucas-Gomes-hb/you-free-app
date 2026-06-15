@@ -5,6 +5,7 @@ import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:mobx/mobx.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import '../../app/theme.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/player_controller.dart';
 import '../components/video_card.dart';
@@ -283,6 +284,7 @@ class _HomePageState extends State<HomePage> {
   // ── Suggestions overlay ────────────────────────────────────────────────
 
   Widget _buildSuggestionsOverlay() {
+    final c = context.c;
     final items = _combinedSuggestions;
     if (items.isEmpty) return const SizedBox.shrink();
 
@@ -293,7 +295,7 @@ class _HomePageState extends State<HomePage> {
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
         decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1C),
+          color: c.surface,
           borderRadius: BorderRadius.circular(10),
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 4))],
         ),
@@ -302,7 +304,7 @@ class _HomePageState extends State<HomePage> {
           padding: const EdgeInsets.symmetric(vertical: 4),
           physics: const NeverScrollableScrollPhysics(),
           itemCount: items.length,
-          separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFF2A2A2A), indent: 48),
+          separatorBuilder: (_, __) => Divider(height: 1, color: c.border, indent: 48),
           itemBuilder: (_, i) {
             final item = items[i];
             return InkWell(
@@ -315,14 +317,14 @@ class _HomePageState extends State<HomePage> {
                     Icon(
                       item.isHistory ? Icons.history_rounded : Icons.search_rounded,
                       size: 16,
-                      color: item.isHistory ? Colors.grey[500] : Colors.grey[600],
+                      color: c.textMuted,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         item.text,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: c.text,
                           fontSize: 14,
                           fontWeight: FontWeight.w400,
                         ),
@@ -334,7 +336,7 @@ class _HomePageState extends State<HomePage> {
                           widget.controller.deleteSearchHistoryEntry(item.text);
                           setState(() => _historyMatches.remove(item.text));
                         },
-                        child: Icon(Icons.close_rounded, size: 15, color: Colors.grey[700]),
+                        child: Icon(Icons.close_rounded, size: 15, color: c.textMuted),
                       )
                     else
                       GestureDetector(
@@ -349,7 +351,7 @@ class _HomePageState extends State<HomePage> {
                             _showSuggestions = false;
                           });
                         },
-                        child: Icon(Icons.north_west_rounded, size: 15, color: Colors.grey[700]),
+                        child: Icon(Icons.north_west_rounded, size: 15, color: c.textMuted),
                       ),
                   ],
                 ),
@@ -365,6 +367,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Observer(builder: (_) {
@@ -379,13 +382,13 @@ class _HomePageState extends State<HomePage> {
                 child: CachedNetworkImage(
                   imageUrl: thumb,
                   fit: BoxFit.cover,
-                  placeholder: (_, __) => Container(color: const Color(0xFF0A0A0A)),
-                  errorWidget: (_, __, ___) => Container(color: const Color(0xFF0A0A0A)),
+                  placeholder: (_, __) => Container(color: c.background),
+                  errorWidget: (_, __, ___) => Container(color: c.background),
                 ),
               ),
               Container(color: Colors.black.withValues(alpha: 0.82)),
             ] else
-              Container(color: const Color(0xFF0A0A0A)),
+              Container(color: c.background),
             SafeArea(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -412,6 +415,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHeader() {
+    final c = context.c;
     return Observer(builder: (_) {
       final hasSearch = widget.controller.searchQuery.isNotEmpty;
       return Padding(
@@ -434,12 +438,12 @@ class _HomePageState extends State<HomePage> {
                     child: Image.asset('assets/youfree.png', width: 34, height: 34),
                   ),
                   const SizedBox(width: 10),
-                  const Text(
+                  Text(
                     'YouFree',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      color: c.text,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -449,7 +453,7 @@ class _HomePageState extends State<HomePage> {
             const Spacer(),
             if (hasSearch)
               IconButton(
-                icon: Icon(Icons.close_rounded, color: Colors.grey[500], size: 22),
+                icon: Icon(Icons.close_rounded, color: c.textMuted, size: 22),
                 onPressed: () {
                   _searchController.clear();
                   widget.controller.clearSearch();
@@ -459,7 +463,7 @@ class _HomePageState extends State<HomePage> {
               )
             else
               IconButton(
-                icon: Icon(Icons.settings_rounded, color: Colors.grey[600], size: 22),
+                icon: Icon(Icons.settings_rounded, color: c.textMuted, size: 22),
                 onPressed: widget.onSettings,
               ),
           ],
@@ -469,18 +473,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildSearchBar() {
+    final c = context.c;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
       child: Observer(
         builder: (_) => TextField(
           controller: _searchController,
           focusNode: _focusNode,
-          style: const TextStyle(color: Colors.white, fontSize: 15),
+          style: TextStyle(color: c.text, fontSize: 15),
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
             hintText: 'Buscar músicas, artistas, URL...',
-            hintStyle: TextStyle(color: Colors.grey[600], fontSize: 14),
-            prefixIcon: Icon(Icons.search_rounded, size: 20, color: Colors.grey[500]),
+            hintStyle: TextStyle(color: c.textMuted, fontSize: 14),
+            prefixIcon: Icon(Icons.search_rounded, size: 20, color: c.textMuted),
             filled: true,
             fillColor: Colors.white.withValues(alpha: 0.07),
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -490,7 +495,7 @@ class _HomePageState extends State<HomePage> {
             ),
             suffixIcon: widget.controller.searchQuery.isNotEmpty
                 ? IconButton(
-                    icon: Icon(Icons.close_rounded, size: 18, color: Colors.grey[600]),
+                    icon: Icon(Icons.close_rounded, size: 18, color: c.textMuted),
                     onPressed: () {
                       _searchController.clear();
                       widget.controller.clearSearch();
@@ -545,9 +550,10 @@ class _HomePageState extends State<HomePage> {
   // ── Body ─────────────────────────────────────────────────────────────────
 
   Widget _buildBody() {
+    final c = context.c;
     return Observer(builder: (_) {
       if (widget.controller.isLoading) {
-        return const Center(child: CircularProgressIndicator(color: Color(0xFFE8432A), strokeWidth: 2));
+        return Center(child: CircularProgressIndicator(color: c.primary, strokeWidth: 2));
       }
       if (widget.controller.errorMessage != null) return _buildError();
 
@@ -565,6 +571,7 @@ class _HomePageState extends State<HomePage> {
   // ── Home screen ──────────────────────────────────────────────────────────
 
   Widget _buildHomeScreen() {
+    final c = context.c;
     return Observer(builder: (_) {
       final history = widget.controller.recentlyPlayed;
       final feedEmpty = _homeFeed.isEmpty && !_homeFeedLoading;
@@ -606,12 +613,12 @@ class _HomePageState extends State<HomePage> {
           if (_homeFeedLoading || _homeFeed.isNotEmpty) ...[
             SliverToBoxAdapter(child: _sectionHeader('Para você')),
             if (_homeFeedLoading && _homeFeed.isEmpty)
-              const SliverToBoxAdapter(
+              SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: LinearProgressIndicator(
-                    color: Color(0xFFE8432A),
-                    backgroundColor: Color(0xFF1A1A1A),
+                    color: c.primary,
+                    backgroundColor: c.surfaceHigh,
                     minHeight: 2,
                   ),
                 ),
@@ -646,13 +653,13 @@ class _HomePageState extends State<HomePage> {
 
           SliverToBoxAdapter(
             child: _loadingMore
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Center(
                       child: SizedBox(
                         width: 24, height: 24,
                         child: CircularProgressIndicator(
-                          color: Color(0xFFE8432A),
+                          color: c.primary,
                           strokeWidth: 2,
                         ),
                       ),
@@ -666,12 +673,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _sectionHeader(String title) {
+    final c = context.c;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
       child: Text(
         title,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: c.text,
           fontSize: 18,
           fontWeight: FontWeight.w800,
           letterSpacing: -0.3,
@@ -691,15 +699,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildSearchHeader(String label) {
+    final c = context.c;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(height: 1, color: Color(0xFF1A1A1A)),
+        Divider(height: 1, color: c.border),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 2),
           child: Text(
             'Resultados para',
-            style: TextStyle(color: Colors.grey[700], fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8),
+            style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8),
           ),
         ),
         Padding(
@@ -708,19 +717,20 @@ class _HomePageState extends State<HomePage> {
             '"${widget.controller.searchQuery}"',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+            style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w700),
           ),
         ),
         if (label.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-            child: Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+            child: Text(label, style: TextStyle(color: c.textMuted, fontSize: 12)),
           ),
       ],
     );
   }
 
   Widget _buildVideoResults() {
+    final c = context.c;
     return Observer(builder: (_) {
       final videos = widget.controller.videos;
       final loadingMore = widget.controller.isLoadingMoreSearch;
@@ -736,13 +746,13 @@ class _HomePageState extends State<HomePage> {
               itemBuilder: (ctx, i) {
                 if (i == videos.length) {
                   return loadingMore
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 20),
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
                           child: Center(
                             child: SizedBox(
                               width: 22, height: 22,
                               child: CircularProgressIndicator(
-                                color: Color(0xFFE8432A), strokeWidth: 2),
+                                color: c.primary, strokeWidth: 2),
                             ),
                           ),
                         )
@@ -764,6 +774,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildChannelResults() {
+    final c = context.c;
     final channels = widget.controller.channels;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -773,7 +784,7 @@ class _HomePageState extends State<HomePage> {
           child: ListView.separated(
             padding: const EdgeInsets.only(bottom: 8),
             itemCount: channels.length,
-            separatorBuilder: (_, __) => const Divider(height: 1, indent: 86, color: Color(0xFF1E1E1E)),
+            separatorBuilder: (_, __) => Divider(height: 1, indent: 86, color: c.border),
             itemBuilder: (ctx, i) {
               final ch = channels[i];
               return ChannelCard(
@@ -789,6 +800,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildPlaylistResults() {
+    final c = context.c;
     final playlists = widget.controller.playlists;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -798,7 +810,7 @@ class _HomePageState extends State<HomePage> {
           child: ListView.separated(
             padding: const EdgeInsets.only(bottom: 8),
             itemCount: playlists.length,
-            separatorBuilder: (_, __) => const Divider(height: 1, indent: 86, color: Color(0xFF1E1E1E)),
+            separatorBuilder: (_, __) => Divider(height: 1, indent: 86, color: c.border),
             itemBuilder: (ctx, i) {
               final pl = playlists[i];
               return _PlaylistTile(
@@ -816,6 +828,7 @@ class _HomePageState extends State<HomePage> {
   // ── Empty / error ────────────────────────────────────────────────────────
 
   Widget _buildEmpty() {
+    final c = context.c;
     final hasQuery = widget.controller.searchQuery.isNotEmpty;
     return Center(
       child: Column(
@@ -824,17 +837,17 @@ class _HomePageState extends State<HomePage> {
           Icon(
             hasQuery ? Icons.search_off_rounded : Icons.music_note_rounded,
             size: 64,
-            color: Colors.grey[800],
+            color: c.textMuted,
           ),
           const SizedBox(height: 14),
           Text(
             hasQuery ? 'Nenhum resultado encontrado' : 'Busque suas músicas favoritas',
-            style: TextStyle(color: Colors.grey[600], fontSize: 15, fontWeight: FontWeight.w500),
+            style: TextStyle(color: c.textMuted, fontSize: 15, fontWeight: FontWeight.w500),
           ),
           if (!hasQuery) ...[
             const SizedBox(height: 8),
             Text('Digite um nome, artista ou cole uma URL',
-                style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                style: TextStyle(color: c.textMuted, fontSize: 13)),
           ],
         ],
       ),
@@ -842,6 +855,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildError() {
+    final c = context.c;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -850,17 +864,17 @@ class _HomePageState extends State<HomePage> {
           children: [
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(50)),
-              child: const Icon(Icons.wifi_off_rounded, size: 40, color: Color(0xFFF5C030)),
+              decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(50)),
+              child: Icon(Icons.wifi_off_rounded, size: 40, color: c.secondary),
             ),
             const SizedBox(height: 20),
-            const Text('Algo deu errado',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text('Algo deu errado',
+                style: TextStyle(color: c.text, fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             Text(
               widget.controller.errorMessage!,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              style: TextStyle(color: c.textMuted, fontSize: 13),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
@@ -870,8 +884,8 @@ class _HomePageState extends State<HomePage> {
               icon: const Icon(Icons.refresh_rounded, size: 18),
               label: const Text('Tentar novamente'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE8432A),
-                foregroundColor: Colors.white,
+                backgroundColor: c.primary,
+                foregroundColor: c.onPrimary,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               ),
@@ -896,19 +910,20 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE8432A) : Colors.white.withValues(alpha: 0.08),
+          color: selected ? c.primary : Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : Colors.grey[500],
+            color: selected ? c.onPrimary : c.textMuted,
             fontSize: 13,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
@@ -931,12 +946,13 @@ class _QuickPlayTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: isPlaying
-              ? const Color(0xFFE8432A).withValues(alpha: 0.25)
+              ? c.primary.withValues(alpha: 0.25)
               : Colors.white.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -967,7 +983,7 @@ class _QuickPlayTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: isPlaying ? const Color(0xFFF5C030) : Colors.white,
+                        color: isPlaying ? c.secondary : c.text,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         height: 1.25,
@@ -979,7 +995,7 @@ class _QuickPlayTile extends StatelessWidget {
                         video.uploader!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.grey[600], fontSize: 10),
+                        style: TextStyle(color: c.textMuted, fontSize: 10),
                       ),
                     ],
                   ],
@@ -987,9 +1003,9 @@ class _QuickPlayTile extends StatelessWidget {
               ),
             ),
             if (isPlaying)
-              const Padding(
-                padding: EdgeInsets.only(right: 8),
-                child: Icon(Icons.equalizer_rounded, color: Color(0xFFF5C030), size: 14),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Icon(Icons.equalizer_rounded, color: c.secondary, size: 14),
               ),
           ],
         ),
@@ -998,10 +1014,13 @@ class _QuickPlayTile extends StatelessWidget {
   }
 
   Widget _artPlaceholder() {
-    return Container(
-      color: const Color(0xFF2A2A2A),
-      child: Icon(Icons.music_note_rounded, color: Colors.grey[700], size: 20),
-    );
+    return Builder(builder: (context) {
+      final c = context.c;
+      return Container(
+        color: c.surfaceHigh,
+        child: Icon(Icons.music_note_rounded, color: c.textMuted, size: 20),
+      );
+    });
   }
 }
 
@@ -1018,9 +1037,10 @@ class _PlaylistTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return InkWell(
       onTap: isLoading ? null : onTap,
-      splashColor: const Color(0xFFE8432A).withValues(alpha: 0.08),
+      splashColor: c.primary.withValues(alpha: 0.08),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
@@ -1044,15 +1064,15 @@ class _PlaylistTile extends StatelessWidget {
                   Text(playlist.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                      style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 3),
                   Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: const Color(0xFF2A2A2A), borderRadius: BorderRadius.circular(4)),
-                        child: const Text('Playlist',
-                            style: TextStyle(color: Color(0xFFF5C030), fontSize: 11, fontWeight: FontWeight.w600)),
+                        decoration: BoxDecoration(color: c.surfaceHigh, borderRadius: BorderRadius.circular(4)),
+                        child: Text('Playlist',
+                            style: TextStyle(color: c.secondary, fontSize: 11, fontWeight: FontWeight.w600)),
                       ),
                       if (playlist.uploader != null) ...[
                         const SizedBox(width: 6),
@@ -1060,13 +1080,13 @@ class _PlaylistTile extends StatelessWidget {
                           child: Text(playlist.uploader!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                              style: TextStyle(color: c.textMuted, fontSize: 12)),
                         ),
                       ],
                       if (playlist.itemCount != null) ...[
                         const SizedBox(width: 6),
                         Text('${playlist.itemCount} faixas',
-                            style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+                            style: TextStyle(color: c.textMuted, fontSize: 12)),
                       ],
                     ],
                   ),
@@ -1075,10 +1095,10 @@ class _PlaylistTile extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             isLoading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20, height: 20,
-                    child: CircularProgressIndicator(color: Color(0xFFE8432A), strokeWidth: 2))
-                : Icon(Icons.chevron_right_rounded, color: Colors.grey[600], size: 24),
+                    child: CircularProgressIndicator(color: c.primary, strokeWidth: 2))
+                : Icon(Icons.chevron_right_rounded, color: c.textMuted, size: 24),
           ],
         ),
       ),
@@ -1086,9 +1106,12 @@ class _PlaylistTile extends StatelessWidget {
   }
 
   Widget _placeholder() {
-    return Container(
-      width: 56, height: 56, color: const Color(0xFF2A2A2A),
-      child: Icon(Icons.queue_music_rounded, color: Colors.grey[700], size: 26),
-    );
+    return Builder(builder: (context) {
+      final c = context.c;
+      return Container(
+        width: 56, height: 56, color: c.surfaceHigh,
+        child: Icon(Icons.queue_music_rounded, color: c.textMuted, size: 26),
+      );
+    });
   }
 }

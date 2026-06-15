@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../app/theme.dart';
 import '../../data/models/collection_model.dart';
 
 class ChannelCard extends StatelessWidget {
@@ -16,10 +17,11 @@ class ChannelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return InkWell(
       onTap: isLoading ? null : onTap,
-      splashColor: const Color(0xFFE8432A).withValues(alpha: 0.08),
-      highlightColor: const Color(0xFFE8432A).withValues(alpha: 0.04),
+      splashColor: c.primary.withValues(alpha: 0.08),
+      highlightColor: c.primary.withValues(alpha: 0.04),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
@@ -34,8 +36,8 @@ class ChannelCard extends StatelessWidget {
                     channel.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: c.text,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -46,13 +48,13 @@ class ChannelCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2A2A2A),
+                          color: c.surfaceHigh,
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Canal',
                           style: TextStyle(
-                            color: Color(0xFFF5C030),
+                            color: c.secondary,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -65,15 +67,15 @@ class ChannelCard extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             isLoading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                      color: Color(0xFFE8432A),
+                      color: c.primary,
                       strokeWidth: 2,
                     ),
                   )
-                : Icon(Icons.chevron_right_rounded, color: Colors.grey[600], size: 24),
+                : Icon(Icons.chevron_right_rounded, color: c.textMuted, size: 24),
           ],
         ),
       ),
@@ -103,11 +105,14 @@ class _Avatar extends StatelessWidget {
   }
 
   Widget _placeholder() {
-    return Container(
-      width: 56,
-      height: 56,
-      color: const Color(0xFF2A2A2A),
-      child: const Icon(Icons.person_rounded, color: Color(0xFF555555), size: 28),
-    );
+    return Builder(builder: (context) {
+      final c = context.c;
+      return Container(
+        width: 56,
+        height: 56,
+        color: c.surfaceHigh,
+        child: Icon(Icons.person_rounded, color: c.textMuted, size: 28),
+      );
+    });
   }
 }

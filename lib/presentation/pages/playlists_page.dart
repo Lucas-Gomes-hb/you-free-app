@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import '../../app/theme.dart';
 import '../../data/models/local_playlist.dart';
 import '../../data/services/playlist_service.dart';
 import '../../data/services/download_manager.dart';
@@ -39,8 +40,8 @@ class PlaylistsPage extends StatelessWidget {
                   return ListView.separated(
                     padding: const EdgeInsets.only(bottom: 8),
                     itemCount: playlists.length,
-                    separatorBuilder: (_, __) => const Divider(
-                        height: 1, indent: 86, color: Color(0xFF1E1E1E)),
+                    separatorBuilder: (_, __) => Divider(
+                        height: 1, indent: 86, color: context.c.border),
                     itemBuilder: (context, i) {
                       final pl = playlists[i];
                       return _PlaylistTile(
@@ -59,29 +60,30 @@ class PlaylistsPage extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _createPlaylist(context),
-        backgroundColor: const Color(0xFFE8432A),
-        child: const Icon(Icons.add_rounded, color: Colors.white),
+        backgroundColor: context.c.primary,
+        child: Icon(Icons.add_rounded, color: context.c.onPrimary),
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context) {
+    final c = context.c;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 18, 8, 14),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
               'Playlists',
               style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: c.text,
                   letterSpacing: -0.5),
             ),
           ),
           IconButton(
-            icon: Icon(Icons.file_download_outlined, color: Colors.grey[600], size: 22),
+            icon: Icon(Icons.file_download_outlined, color: c.textMuted, size: 22),
             tooltip: 'Importar de URL',
             onPressed: () => _importFromUrl(context),
           ),
@@ -91,25 +93,28 @@ class PlaylistsPage extends StatelessWidget {
   }
 
   Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.queue_music_rounded, size: 64, color: Colors.grey[800]),
-          const SizedBox(height: 14),
-          Text(
-            'Nenhuma playlist criada',
-            style: TextStyle(
-                color: Colors.grey[600], fontSize: 15, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Toque + para criar ou importe de uma URL',
-            style: TextStyle(color: Colors.grey[700], fontSize: 13),
-          ),
-        ],
-      ),
-    );
+    return Builder(builder: (context) {
+      final c = context.c;
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.queue_music_rounded, size: 64, color: c.textMuted),
+            const SizedBox(height: 14),
+            Text(
+              'Nenhuma playlist criada',
+              style: TextStyle(
+                  color: c.textMuted, fontSize: 15, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Toque + para criar ou importe de uma URL',
+              style: TextStyle(color: c.textMuted, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   void _openDetail(BuildContext context, LocalPlaylist playlist) {
@@ -137,26 +142,27 @@ class PlaylistsPage extends StatelessWidget {
   }
 
   Future<void> _deletePlaylist(BuildContext context, LocalPlaylist playlist) async {
+    final c = context.c;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('Deletar playlist',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: c.surface,
+        title: Text('Deletar playlist',
+            style: TextStyle(color: c.text)),
         content: Text(
           'Deletar "${playlist.name}"?',
-          style: TextStyle(color: Colors.grey[400]),
+          style: TextStyle(color: c.textMuted),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child:
-                Text('Cancelar', style: TextStyle(color: Colors.grey[500])),
+                Text('Cancelar', style: TextStyle(color: c.textMuted)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Deletar',
-                style: TextStyle(color: Color(0xFFE8432A))),
+            child: Text('Deletar',
+                style: TextStyle(color: c.primary)),
           ),
         ],
       ),
@@ -167,6 +173,7 @@ class PlaylistsPage extends StatelessWidget {
   }
 
   Future<void> _importFromUrl(BuildContext context) async {
+    final c = context.c;
     final urlController = TextEditingController();
     final nameController = TextEditingController();
 
@@ -178,36 +185,36 @@ class PlaylistsPage extends StatelessWidget {
         String? error;
         return StatefulBuilder(
           builder: (ctx, setStateDialog) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A1A),
-            title: const Text('Importar playlist',
-                style: TextStyle(color: Colors.white)),
+            backgroundColor: c.surface,
+            title: Text('Importar playlist',
+                style: TextStyle(color: c.text)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: urlController,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: c.text),
                   decoration: InputDecoration(
                     hintText: 'URL do YouTube ou Spotify...',
                     hintStyle:
-                        TextStyle(color: Colors.grey[600], fontSize: 13),
+                        TextStyle(color: c.textMuted, fontSize: 13),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: nameController,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: c.text),
                   decoration: InputDecoration(
                     hintText: 'Nome da playlist (opcional)',
                     hintStyle:
-                        TextStyle(color: Colors.grey[600], fontSize: 13),
+                        TextStyle(color: c.textMuted, fontSize: 13),
                   ),
                 ),
                 if (loading) ...[
                   const SizedBox(height: 12),
-                  const LinearProgressIndicator(
-                      color: Color(0xFFE8432A),
-                      backgroundColor: Color(0xFF2A2A2A)),
+                  LinearProgressIndicator(
+                      color: c.primary,
+                      backgroundColor: c.surfaceHigh),
                 ],
                 if (error != null) ...[
                   const SizedBox(height: 8),
@@ -221,7 +228,7 @@ class PlaylistsPage extends StatelessWidget {
               TextButton(
                 onPressed: loading ? null : () => Navigator.pop(ctx),
                 child: Text('Cancelar',
-                    style: TextStyle(color: Colors.grey[500])),
+                    style: TextStyle(color: c.textMuted)),
               ),
               TextButton(
                 onPressed: loading
@@ -250,8 +257,8 @@ class PlaylistsPage extends StatelessWidget {
                           });
                         }
                       },
-                child: const Text('Importar',
-                    style: TextStyle(color: Color(0xFFE8432A))),
+                child: Text('Importar',
+                    style: TextStyle(color: c.primary)),
               ),
             ],
           ),
@@ -265,31 +272,32 @@ class PlaylistsPage extends StatelessWidget {
 
   Future<String?> _showNameDialog(
       BuildContext context, String title, String initialValue) async {
+    final c = context.c;
     final controller = TextEditingController(text: initialValue);
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
+        backgroundColor: c.surface,
+        title: Text(title, style: TextStyle(color: c.text)),
         content: TextField(
           controller: controller,
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: c.text),
           autofocus: true,
           decoration: InputDecoration(
             hintText: 'Nome da playlist',
-            hintStyle: TextStyle(color: Colors.grey[600]),
+            hintStyle: TextStyle(color: c.textMuted),
           ),
           onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancelar', style: TextStyle(color: Colors.grey[500])),
+            child: Text('Cancelar', style: TextStyle(color: c.textMuted)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
             child:
-                const Text('OK', style: TextStyle(color: Color(0xFFE8432A))),
+                Text('OK', style: TextStyle(color: c.primary)),
           ),
         ],
       ),
@@ -314,9 +322,10 @@ class _PlaylistTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return InkWell(
       onTap: onTap,
-      splashColor: const Color(0xFFE8432A).withValues(alpha: 0.08),
+      splashColor: c.primary.withValues(alpha: 0.08),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
@@ -343,45 +352,43 @@ class _PlaylistTile extends StatelessWidget {
                     playlist.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: c.text,
                         fontSize: 15,
                         fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     '${playlist.tracks.length} faixa${playlist.tracks.length == 1 ? '' : 's'}',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    style: TextStyle(color: c.textMuted, fontSize: 12),
                   ),
                 ],
               ),
             ),
             PopupMenuButton<String>(
               icon: Icon(Icons.more_vert_rounded,
-                  color: Colors.grey[600], size: 20),
-              color: const Color(0xFF1A1A1A),
+                  color: c.textMuted, size: 20),
+              color: c.surfaceHigh,
               onSelected: (v) {
                 if (v == 'rename') onRename();
                 if (v == 'delete') onDelete();
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'rename',
                   child: Row(children: [
-                    Icon(Icons.edit_rounded, size: 18, color: Colors.white70),
-                    SizedBox(width: 10),
-                    Text('Renomear',
-                        style: TextStyle(color: Colors.white)),
+                    Icon(Icons.edit_rounded, size: 18, color: c.text),
+                    const SizedBox(width: 10),
+                    Text('Renomear', style: TextStyle(color: c.text)),
                   ]),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'delete',
                   child: Row(children: [
                     Icon(Icons.delete_outline_rounded,
-                        size: 18, color: Color(0xFFE8432A)),
-                    SizedBox(width: 10),
-                    Text('Deletar',
-                        style: TextStyle(color: Color(0xFFE8432A))),
+                        size: 18, color: c.primary),
+                    const SizedBox(width: 10),
+                    Text('Deletar', style: TextStyle(color: c.primary)),
                   ]),
                 ),
               ],
@@ -393,11 +400,14 @@ class _PlaylistTile extends StatelessWidget {
   }
 
   Widget _placeholder() {
-    return Container(
-      width: 56,
-      height: 56,
-      color: const Color(0xFF2A2A2A),
-      child: Icon(Icons.queue_music_rounded, color: Colors.grey[700], size: 26),
-    );
+    return Builder(builder: (context) {
+      final c = context.c;
+      return Container(
+        width: 56,
+        height: 56,
+        color: c.surfaceHigh,
+        child: Icon(Icons.queue_music_rounded, color: c.textMuted, size: 26),
+      );
+    });
   }
 }

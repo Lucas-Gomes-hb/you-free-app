@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import '../../app/theme.dart';
 import '../controllers/player_controller.dart';
 
 class MiniPlayer extends StatelessWidget {
@@ -17,6 +18,7 @@ class MiniPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return Observer(builder: (_) {
       final video = controller.currentVideo;
       if (video == null) return const SizedBox.shrink();
@@ -25,16 +27,16 @@ class MiniPlayer extends StatelessWidget {
         onTap: () => context.push('/player', extra: video),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.85),
-            border: const Border(top: BorderSide(color: Color(0xFF2A2A2A), width: 0.5)),
+            color: c.surface.withValues(alpha: 0.92),
+            border: Border(top: BorderSide(color: c.border, width: 0.5)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Observer(builder: (_) => LinearProgressIndicator(
                 value: controller.progress.clamp(0.0, 1.0),
-                backgroundColor: const Color(0xFF2A2A2A),
-                color: const Color(0xFFE8432A),
+                backgroundColor: c.surfaceHigh,
+                color: c.primary,
                 minHeight: 2,
               )),
               Padding(
@@ -52,10 +54,10 @@ class MiniPlayer extends StatelessWidget {
                             video.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: c.text,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -67,7 +69,7 @@ class MiniPlayer extends StatelessWidget {
                                 video.uploader ?? '',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                                style: TextStyle(fontSize: 12, color: c.textMuted),
                               );
                             }
                             return Row(
@@ -78,12 +80,12 @@ class MiniPlayer extends StatelessWidget {
                                       video.uploader!,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                                      style: TextStyle(fontSize: 12, color: c.textMuted),
                                     ),
                                   ),
                                 Text(
                                   '  ${_fmt(pos)} / ${_fmt(dur)}',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                  style: TextStyle(fontSize: 11, color: c.textMuted),
                                 ),
                               ],
                             );
@@ -93,12 +95,12 @@ class MiniPlayer extends StatelessWidget {
                     ),
                     Observer(builder: (_) {
                       if (controller.isLoading) {
-                        return const SizedBox(
+                        return SizedBox(
                           width: 48, height: 48,
                           child: Center(
                             child: SizedBox(
                               width: 20, height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE8432A)),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
                             ),
                           ),
                         );
@@ -109,13 +111,13 @@ class MiniPlayer extends StatelessWidget {
                           IconButton(
                             icon: Icon(
                               controller.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                              color: Colors.white,
+                              color: c.text,
                               size: 30,
                             ),
                             onPressed: controller.togglePlayPause,
                           ),
                           IconButton(
-                            icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 26),
+                            icon: Icon(Icons.skip_next_rounded, color: c.text, size: 26),
                             onPressed: controller.skipToNext,
                           ),
                         ],
@@ -152,10 +154,13 @@ class _Thumbnail extends StatelessWidget {
   }
 
   Widget _placeholder() {
-    return Container(
-      width: 48, height: 48,
-      color: const Color(0xFF2A2A2A),
-      child: Icon(Icons.music_note_rounded, color: Colors.grey[700], size: 22),
-    );
+    return Builder(builder: (context) {
+      final c = context.c;
+      return Container(
+        width: 48, height: 48,
+        color: c.surfaceHigh,
+        child: Icon(Icons.music_note_rounded, color: c.textMuted, size: 22),
+      );
+    });
   }
 }

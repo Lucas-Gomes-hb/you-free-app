@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:go_router/go_router.dart';
+import '../../app/theme.dart';
 import '../../data/models/local_playlist.dart';
 import '../../data/models/video_model.dart';
 import '../../data/services/playlist_service.dart';
@@ -49,6 +50,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     return ListenableBuilder(
       listenable: widget.playlistService,
       builder: (context, _) {
+        final c = context.c;
         final idx = widget.playlistService.playlists
             .indexWhere((p) => p.id == widget.playlistId);
         final playlist =
@@ -56,17 +58,17 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
 
         if (playlist == null) {
           return Scaffold(
-            backgroundColor: const Color(0xFF0A0A0A),
+            backgroundColor: c.background,
             appBar: AppBar(title: const Text('Playlist')),
-            body: const Center(
+            body: Center(
                 child: Text('Playlist não encontrada',
-                    style: TextStyle(color: Colors.grey))),
+                    style: TextStyle(color: c.textMuted))),
             bottomNavigationBar: MiniPlayer(controller: widget.playerController),
           );
         }
 
         return Scaffold(
-          backgroundColor: const Color(0xFF0A0A0A),
+          backgroundColor: c.background,
           body: SafeArea(
             child: Column(
               children: [
@@ -82,9 +84,9 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           bottomNavigationBar: MiniPlayer(controller: widget.playerController),
           floatingActionButton: FloatingActionButton(
             onPressed: () => _showAddTracksSheet(context, playlist),
-            backgroundColor: const Color(0xFFE8432A),
+            backgroundColor: c.primary,
             mini: true,
-            child: const Icon(Icons.add_rounded, color: Colors.white),
+            child: Icon(Icons.add_rounded, color: c.onPrimary),
           ),
         );
       },
@@ -92,26 +94,30 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   }
 
   Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.music_note_rounded, size: 64, color: Colors.grey[800]),
-          const SizedBox(height: 14),
-          Text('Nenhuma música adicionada',
-              style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
-          Text('Toque + para adicionar músicas',
-              style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-        ],
-      ),
-    );
+    return Builder(builder: (context) {
+      final c = context.c;
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.music_note_rounded, size: 64, color: c.textMuted),
+            const SizedBox(height: 14),
+            Text('Nenhuma música adicionada',
+                style: TextStyle(
+                    color: c.textMuted,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
+            Text('Toque + para adicionar músicas',
+                style: TextStyle(color: c.textMuted, fontSize: 13)),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildTrackList(BuildContext context, LocalPlaylist playlist) {
+    final c = context.c;
     final isDl = _isDownloadsPlaylist(playlist);
     final dm = widget.downloadManager;
 
@@ -130,8 +136,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                       style:
                           TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE8432A),
-                    foregroundColor: Colors.white,
+                    backgroundColor: c.primary,
+                    foregroundColor: c.onPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -151,8 +157,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                       style:
                           TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0xFF3A3A3A)),
+                    foregroundColor: c.text,
+                    side: BorderSide(color: c.border),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -178,9 +184,9 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                 background: Container(
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
-                  color: const Color(0xFFE8432A).withValues(alpha: 0.8),
-                  child: const Icon(Icons.delete_outline_rounded,
-                      color: Colors.white),
+                  color: c.primary.withValues(alpha: 0.8),
+                  child: Icon(Icons.delete_outline_rounded,
+                      color: c.onPrimary),
                 ),
                 confirmDismiss: (_) async {
                   if (!canDeleteFile) {
@@ -192,19 +198,19 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                   final result = await showDialog<String>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      backgroundColor: const Color(0xFF1A1A1A),
+                      backgroundColor: c.surface,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
-                      title: const Text('Remover faixa',
+                      title: Text('Remover faixa',
                           style: TextStyle(
-                              color: Colors.white,
+                              color: c.text,
                               fontWeight: FontWeight.w700)),
                       content: Text(
                         video.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style:
-                            TextStyle(color: Colors.grey[400], fontSize: 13),
+                            TextStyle(color: c.textMuted, fontSize: 13),
                       ),
                       actionsPadding:
                           const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -212,18 +218,18 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
                           child: Text('Cancelar',
-                              style: TextStyle(color: Colors.grey[500])),
+                              style: TextStyle(color: c.textMuted)),
                         ),
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, 'playlist'),
-                          child: const Text('Só da playlist',
-                              style: TextStyle(color: Colors.white70)),
+                          child: Text('Só da playlist',
+                              style: TextStyle(color: c.text)),
                         ),
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, 'disk'),
-                          child: const Text('Excluir arquivo',
+                          child: Text('Excluir arquivo',
                               style: TextStyle(
-                                  color: Color(0xFFE8432A),
+                                  color: c.primary,
                                   fontWeight: FontWeight.w700)),
                         ),
                       ],
@@ -266,7 +272,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: context.c.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -285,13 +291,14 @@ class _AppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       child: Row(
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-            color: Colors.white,
+            color: c.text,
             onPressed: () => context.pop(),
           ),
           Expanded(
@@ -299,8 +306,8 @@ class _AppBar extends StatelessWidget {
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: Colors.white,
+              style: TextStyle(
+                  color: c.text,
                   fontSize: 18,
                   fontWeight: FontWeight.w700),
             ),
@@ -358,6 +365,7 @@ class _AddTracksSheetState extends State<_AddTracksSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.7,
@@ -370,7 +378,7 @@ class _AddTracksSheetState extends State<_AddTracksSheet> {
             height: 4,
             margin: const EdgeInsets.only(top: 8, bottom: 12),
             decoration: BoxDecoration(
-              color: Colors.grey[700],
+              color: c.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -378,16 +386,16 @@ class _AddTracksSheetState extends State<_AddTracksSheet> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
               controller: _searchController,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
+              style: TextStyle(color: c.text, fontSize: 15),
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText: 'Buscar músicas...',
                 hintStyle:
-                    TextStyle(color: Colors.grey[600], fontSize: 14),
+                    TextStyle(color: c.textMuted, fontSize: 14),
                 prefixIcon: Icon(Icons.search_rounded,
-                    size: 20, color: Colors.grey[500]),
+                    size: 20, color: c.textMuted),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.07),
+                fillColor: c.surfaceHigh,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -398,11 +406,11 @@ class _AddTracksSheetState extends State<_AddTracksSheet> {
             ),
           ),
           if (_loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: LinearProgressIndicator(
-                  color: Color(0xFFE8432A),
-                  backgroundColor: Color(0xFF2A2A2A),
+                  color: c.primary,
+                  backgroundColor: c.surfaceHigh,
                   minHeight: 2),
             ),
           if (_error != null)
@@ -417,7 +425,7 @@ class _AddTracksSheetState extends State<_AddTracksSheet> {
                     child: Text(
                       'Busque por nome ou artista',
                       style:
-                          TextStyle(color: Colors.grey[600], fontSize: 13),
+                          TextStyle(color: c.textMuted, fontSize: 13),
                     ),
                   )
                 : ListView.builder(
@@ -445,13 +453,13 @@ class _AddTracksSheetState extends State<_AddTracksSheet> {
                           video.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 14),
+                          style: TextStyle(
+                              color: c.text, fontSize: 14),
                         ),
                         subtitle: video.uploader != null
                             ? Text(video.uploader!,
                                 style: TextStyle(
-                                    color: Colors.grey[600], fontSize: 12))
+                                    color: c.textMuted, fontSize: 12))
                             : null,
                         trailing: IconButton(
                           icon: Icon(
@@ -460,7 +468,7 @@ class _AddTracksSheetState extends State<_AddTracksSheet> {
                                 : Icons.add_rounded,
                             color: added
                                 ? const Color(0xFF4CAF50)
-                                : const Color(0xFFE8432A),
+                                : c.primary,
                           ),
                           onPressed: added
                               ? null
@@ -481,11 +489,14 @@ class _AddTracksSheetState extends State<_AddTracksSheet> {
   }
 
   Widget _thumbPlaceholder() {
-    return Container(
-      width: 50,
-      height: 50,
-      color: const Color(0xFF2A2A2A),
-      child: Icon(Icons.music_note_rounded, color: Colors.grey[700]),
-    );
+    return Builder(builder: (context) {
+      final c = context.c;
+      return Container(
+        width: 50,
+        height: 50,
+        color: c.surfaceHigh,
+        child: Icon(Icons.music_note_rounded, color: c.textMuted),
+      );
+    });
   }
 }

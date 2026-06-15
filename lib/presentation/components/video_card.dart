@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../app/theme.dart';
 import '../../data/models/video_model.dart';
 
 class VideoCard extends StatelessWidget {
@@ -16,10 +17,11 @@ class VideoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return InkWell(
       onTap: onTap,
-      splashColor: const Color(0xFFE8432A).withValues(alpha: 0.08),
-      highlightColor: const Color(0xFFE8432A).withValues(alpha: 0.04),
+      splashColor: c.primary.withValues(alpha: 0.08),
+      highlightColor: c.primary.withValues(alpha: 0.04),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Row(
@@ -35,7 +37,7 @@ class VideoCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: isCurrentlyPlaying ? const Color(0xFFE8432A) : Colors.white,
+                      color: isCurrentlyPlaying ? c.primary : c.text,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       height: 1.3,
@@ -50,14 +52,14 @@ class VideoCard extends StatelessWidget {
                             video.uploader!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                            style: TextStyle(color: c.textMuted, fontSize: 12),
                           ),
                         ),
-                        Text(' · ', style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+                        Text(' · ', style: TextStyle(color: c.textMuted, fontSize: 12)),
                       ],
                       Text(
                         video.durationFormatted,
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        style: TextStyle(color: c.textMuted, fontSize: 12),
                       ),
                     ],
                   ),
@@ -67,7 +69,7 @@ class VideoCard extends StatelessWidget {
             const SizedBox(width: 8),
             Icon(
               isCurrentlyPlaying ? Icons.equalizer_rounded : Icons.more_vert_rounded,
-              color: isCurrentlyPlaying ? const Color(0xFFE8432A) : Colors.grey[700],
+              color: isCurrentlyPlaying ? c.primary : c.textMuted,
               size: 20,
             ),
           ],
@@ -117,11 +119,14 @@ class _Thumbnail extends StatelessWidget {
   }
 
   Widget _placeholder() {
-    return Container(
-      width: 112,
-      height: 64,
-      color: const Color(0xFF2A2A2A),
-      child: Icon(Icons.music_note_rounded, color: Colors.grey[700], size: 28),
-    );
+    return Builder(builder: (context) {
+      final c = context.c;
+      return Container(
+        width: 112,
+        height: 64,
+        color: c.surfaceHigh,
+        child: Icon(Icons.music_note_rounded, color: c.textMuted, size: 28),
+      );
+    });
   }
 }

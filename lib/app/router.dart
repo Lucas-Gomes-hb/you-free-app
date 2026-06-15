@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'theme.dart';
+import 'theme_controller.dart';
 import '../data/models/video_model.dart';
 import '../data/models/collection_model.dart';
 import '../data/services/api_service.dart';
@@ -26,6 +28,7 @@ class AppRouter {
   final VideoRepository videoRepository;
   final PlaylistService playlistService;
   final ValueNotifier<bool> pipModeNotifier;
+  final ThemeController themeController;
 
   AppRouter({
     required this.homeController,
@@ -36,6 +39,7 @@ class AppRouter {
     required this.videoRepository,
     required this.playlistService,
     required this.pipModeNotifier,
+    required this.themeController,
   });
 
   late final GoRouter router = GoRouter(
@@ -111,6 +115,7 @@ class AppRouter {
         builder: (context, state) => SettingsPage(
           apiService: apiService,
           settingsService: settingsService,
+          themeController: themeController,
         ),
       ),
     ],
@@ -130,8 +135,9 @@ class _MainShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.c;
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: c.background,
       body: navigationShell,
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
@@ -146,9 +152,9 @@ class _MainShell extends StatelessWidget {
                 initialLocation: i == navigationShell.currentIndex,
               );
             },
-            backgroundColor: const Color(0xFF0A0A0A),
-            selectedItemColor: const Color(0xFFE8432A),
-            unselectedItemColor: const Color(0xFF666666),
+            backgroundColor: c.background,
+            selectedItemColor: c.primary,
+            unselectedItemColor: c.textMuted,
             type: BottomNavigationBarType.fixed,
             selectedLabelStyle: const TextStyle(
                 fontSize: 11, fontWeight: FontWeight.w600),

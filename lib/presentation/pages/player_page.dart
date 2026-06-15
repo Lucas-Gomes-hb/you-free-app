@@ -5,8 +5,10 @@ import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:mobx/mobx.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
+import '../../app/theme.dart';
 import '../controllers/player_controller.dart';
 import '../components/video_card.dart';
+import '../components/video_player_view.dart';
 import '../../data/models/video_model.dart';
 import '../../data/services/download_manager.dart';
 
@@ -138,9 +140,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         backgroundColor: Colors.black,
         body: Observer(builder: (_) {
           if (widget.controller.isLoading && widget.controller.currentVideo == null) {
-            return const SafeArea(
+            final c = context.c;
+            return SafeArea(
               child: Center(
-                child: CircularProgressIndicator(color: Color(0xFFE8432A), strokeWidth: 2),
+                child: CircularProgressIndicator(color: c.primary, strokeWidth: 2),
               ),
             );
           }
@@ -152,6 +155,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Widget _buildError() {
+    final c = context.c;
     return SafeArea(
       child: Column(
         children: [
@@ -168,7 +172,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     child: Text(
                       widget.controller.errorMessage!,
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                      style: TextStyle(color: c.textMuted, fontSize: 14),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -177,8 +181,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('Tentar novamente'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE8432A),
-                      foregroundColor: Colors.white,
+                      backgroundColor: c.primary,
+                      foregroundColor: c.onPrimary,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     ),
@@ -216,6 +220,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Widget _buildNormalLayout(VideoModel video) {
+    // Video mode draws its own play/pause/seek/fullscreen controls over the
+    // frame (YouTube-style), so the audio transport row is hidden in that mode.
+    final isVideoMode = widget.controller.isVideoMode;
     return Column(
       children: [
         _buildTopBar(),
@@ -232,10 +239,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     children: [
                       const SizedBox(height: 20),
                       _buildTitleSection(video.title, video.uploader ?? ''),
-                      const SizedBox(height: 20),
-                      _buildProgressBar(),
-                      const SizedBox(height: 12),
-                      _buildControls(),
+                      if (!isVideoMode) ...[
+                        const SizedBox(height: 20),
+                        _buildProgressBar(),
+                        const SizedBox(height: 12),
+                        _buildControls(),
+                      ],
                       const SizedBox(height: 16),
                     ],
                   ),
@@ -301,10 +310,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Widget _buildLyricsPanel() {
     return Observer(builder: (_) {
+      final c = context.c;
       final ctrl = widget.controller;
       if (ctrl.lyricsLoading) {
-        return const Center(
-          child: CircularProgressIndicator(color: Color(0xFFE8432A), strokeWidth: 2),
+        return Center(
+          child: CircularProgressIndicator(color: c.primary, strokeWidth: 2),
         );
       }
       if (ctrl.lyricsLoaded && ctrl.plainLyrics == null && ctrl.syncedLyrics == null) {
@@ -419,51 +429,23 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (widget.controller.isVideoMode && widget.controller.videoController != null) {
       return KeyedSubtree(
         key: _videoContainerKey,
-        child: _buildVideoPlayer(widget.controller.videoController!),
+        child: VideoPlayerView(
+          controller: widget.controller,
+          onToggleFullscreen: _openFullscreen,
+        ),
       );
     }
     return _buildThumbnail(thumb);
   }
 
-  Widget _buildVideoPlayer(VideoPlayerController vc) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: LayoutBuilder(
-        builder: (_, constraints) {
-          final width = constraints.maxWidth;
-          final height = vc.value.isInitialized
-              ? width / vc.value.aspectRatio
-              : width * 9 / 16;
-          return Container(
-            width: width,
-            height: height,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.black,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.7),
-                  blurRadius: 50,
-                  offset: const Offset(0, 20),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: vc.value.isInitialized
-                  ? AspectRatio(
-                      aspectRatio: vc.value.aspectRatio,
-                      child: VideoPlayer(vc),
-                    )
-                  : const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFFE8432A),
-                        strokeWidth: 2,
-                      ),
-                    ),
-            ),
-          );
-        },
+  void _openFullscreen() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: true,
+        pageBuilder: (_, __, ___) =>
+            FullscreenVideoPage(controller: widget.controller),
+        transitionsBuilder: (_, anim, __, child) =>
+            FadeTransition(opacity: anim, child: child),
       ),
     );
   }
@@ -571,6 +553,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Widget _buildDownloadButton() {
     // Observer reacts to currentVideo changes; ListenableBuilder reacts to download progress
+    final c = context.c;
     return Observer(builder: (_) {
       final video = widget.controller.currentVideo;
       if (video == null) return const SizedBox(width: 48);
@@ -598,7 +581,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                         child: CircularProgressIndicator(
                           value: info.progress > 0 ? info.progress : null,
                           strokeWidth: 2.5,
-                          color: const Color(0xFFE8432A),
+                          color: c.primary,
                         ),
                       ),
                       GestureDetector(
@@ -611,7 +594,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               );
             case DownloadStatus.done:
               return IconButton(
-                icon: const Icon(Icons.download_done_rounded, color: Color(0xFFE8432A)),
+                icon: Icon(Icons.download_done_rounded, color: c.primary),
                 onPressed: null,
               );
             case DownloadStatus.error:
@@ -711,6 +694,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Widget _buildSuggestions() {
+    final c = context.c;
     return Observer(builder: (_) {
       final suggestions = widget.controller.suggestions;
       final loading = widget.controller.isSuggestionsLoading;
@@ -722,11 +706,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 10),
               child: Text('A seguir',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: TextStyle(color: c.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
             ),
-            const LinearProgressIndicator(
-              color: Color(0xFFE8432A),
-              backgroundColor: Color(0xFF2A2A2A),
+            LinearProgressIndicator(
+              color: c.primary,
+              backgroundColor: c.surfaceHigh,
               minHeight: 2,
             ),
           ],
@@ -742,7 +726,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
             child: Text('A seguir',
-                style: TextStyle(color: Colors.grey[500], fontSize: 13, fontWeight: FontWeight.w600)),
+                style: TextStyle(color: c.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
           ),
           ListView.separated(
             shrinkWrap: true,

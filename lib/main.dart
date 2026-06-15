@@ -5,6 +5,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:mobx/mobx.dart';
 import 'app/app.dart';
 import 'app/router.dart';
+import 'app/theme_controller.dart';
 import 'data/services/api_service.dart';
 import 'data/services/history_service.dart';
 import 'data/services/audio_handler.dart';
@@ -23,6 +24,9 @@ Future<void> main() async {
   final settingsService = SettingsService();
   await settingsService.load();
 
+  final themeController = ThemeController();
+  await themeController.load();
+
   final audioHandler = await AudioService.init<YouFreeAudioHandler>(
     builder: () => YouFreeAudioHandler(),
     config: AudioServiceConfig(
@@ -33,15 +37,24 @@ Future<void> main() async {
     ),
   );
 
-  runApp(YouFreeApp(audioHandler: audioHandler, settingsService: settingsService));
+  runApp(YouFreeApp(
+    audioHandler: audioHandler,
+    settingsService: settingsService,
+    themeController: themeController,
+  ));
 }
 
 class YouFreeApp extends StatefulWidget {
   final YouFreeAudioHandler audioHandler;
   final SettingsService settingsService;
+  final ThemeController themeController;
 
-  const YouFreeApp({Key? key, required this.audioHandler, required this.settingsService})
-      : super(key: key);
+  const YouFreeApp({
+    Key? key,
+    required this.audioHandler,
+    required this.settingsService,
+    required this.themeController,
+  }) : super(key: key);
 
   @override
   _YouFreeAppState createState() => _YouFreeAppState();
@@ -128,6 +141,7 @@ class _YouFreeAppState extends State<YouFreeApp> {
       videoRepository: _videoRepository,
       playlistService: _playlistService,
       pipModeNotifier: _pipModeNotifier,
+      themeController: widget.themeController,
     );
   }
 
@@ -142,6 +156,6 @@ class _YouFreeAppState extends State<YouFreeApp> {
 
   @override
   Widget build(BuildContext context) {
-    return App(appRouter: _appRouter);
+    return App(appRouter: _appRouter, themeController: widget.themeController);
   }
 }
