@@ -7,6 +7,10 @@ class VideoRepository {
 
   VideoRepository(this._apiService);
 
+  /// True when streams are resolved on-device, which changes how their URLs
+  /// must be fetched — see [ChunkedAudioSource].
+  bool get isLocalSource => _apiService.isLocal;
+
   Future<List<VideoModel>> searchVideos(String query, {int offset = 0}) async {
     return await _apiService.search(query, offset: offset);
   }

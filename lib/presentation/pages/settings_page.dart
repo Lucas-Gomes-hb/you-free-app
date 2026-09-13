@@ -34,12 +34,27 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _showCookiesPaste = false;
 
   late int _autoDownloadLimit;
+  late ContentMode _contentMode;
+
+  bool get _isLocal => _contentMode == ContentMode.local;
 
   @override
   void initState() {
     super.initState();
     _urlController = TextEditingController(text: widget.settingsService.apiUrl);
     _autoDownloadLimit = widget.settingsService.autoDownloadLimit;
+    _contentMode = widget.settingsService.contentMode;
+    _loadStatus();
+  }
+
+  Future<void> _setContentMode(ContentMode mode) async {
+    if (mode == _contentMode) return;
+    setState(() {
+      _contentMode = mode;
+      _urlTestResult = null;
+    });
+    widget.apiService.mode = mode;
+    await widget.settingsService.setContentMode(mode);
     _loadStatus();
   }
 
@@ -130,9 +145,14 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildSectionHeader('Aparência'),
           _buildCard([_buildThemeSection()]),
           const SizedBox(height: 24),
-          _buildSectionHeader('Servidor'),
-          _buildCard([_buildApiUrlSection()]),
+          _buildSectionHeader('Fonte de conteúdo'),
+          _buildCard([_buildContentModeSection()]),
           const SizedBox(height: 24),
+          if (!_isLocal) ...[
+            _buildSectionHeader('Servidor'),
+            _buildCard([_buildApiUrlSection()]),
+            const SizedBox(height: 24),
+          ],
           _buildSectionHeader('Downloads automáticos'),
           _buildCard([_buildAutoDownloadSection()]),
           const SizedBox(height: 24),
@@ -337,6 +357,96 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // ── Content mode ──────────────────────────────────────────────────────────
+
+  Widget _buildContentModeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildModeOption(
+          mode: ContentMode.api,
+          icon: Icons.dns_rounded,
+          title: 'Pela API',
+          description:
+              'Usa o servidor YouFree (yt-dlp). Toca qualquer música e '
+              'suporta cookies. Precisa do servidor ligado.',
+        ),
+        const SizedBox(height: 8),
+        _buildModeOption(
+          mode: ContentMode.local,
+          icon: Icons.phone_android_rounded,
+          title: 'No próprio app (experimental)',
+          description:
+              'Dispensa o servidor: busca, playlists, canais, letras e feed '
+              'funcionam direto no app. A reprodução, porém, falha na maioria '
+              'das músicas — o YouTube só libera o áudio completo para quem '
+              'resolve o desafio de JavaScript dele.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModeOption({
+    required ContentMode mode,
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    final c = context.c;
+    final selected = _contentMode == mode;
+    return InkWell(
+      onTap: () => _setContentMode(mode),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected ? c.primary.withValues(alpha: 0.10) : c.surfaceHigh,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? c.primary : c.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 20, color: selected ? c.primary : c.textMuted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: c.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                        color: c.textMuted, fontSize: 12, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              size: 20,
+              color: selected ? c.primary : c.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildApiUrlSection() {
     final c = context.c;
     return Column(
@@ -409,6 +519,23 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildCookiesSection() {
     final c = context.c;
+    if (_isLocal) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_open_rounded, size: 18, color: c.textMuted),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No modo "no próprio app" o acesso é anônimo. Conteúdo com '
+              'restrição de idade ou playlists privadas precisam do modo '
+              '"pela API", onde os cookies ficam no servidor.',
+              style: TextStyle(color: c.textMuted, fontSize: 12, height: 1.5),
+            ),
+          ),
+        ],
+      );
+    }
     if (_statusLoading) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -567,6 +694,7 @@ class _StatusBadge extends StatelessWidget {
     final (label, color) = switch (source) {
       'cookies_file' => ('Autenticado', const Color(0xFF4CAF50)),
       'firefox' => ('Firefox', const Color(0xFF2196F3)),
+      'local' => ('No app', const Color(0xFF4CAF50)),
       _ => ('Anônimo', const Color(0xFF9E9E9E)),
     };
 

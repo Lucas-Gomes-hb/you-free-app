@@ -79,7 +79,10 @@ class _YouFreeAppState extends State<YouFreeApp> {
   @override
   void initState() {
     super.initState();
-    _apiService = ApiService(widget.settingsService.apiUrl);
+    _apiService = ApiService(
+      widget.settingsService.apiUrl,
+      mode: widget.settingsService.contentMode,
+    );
     _videoRepository = VideoRepository(_apiService);
     _historyService = HistoryService();
     _homeController = HomeController(_videoRepository, _historyService);

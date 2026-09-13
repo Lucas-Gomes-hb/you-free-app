@@ -1,230 +1,100 @@
-import 'package:dio/dio.dart';
-import '../../core/constants.dart';
 import '../models/video_model.dart';
 import '../models/collection_model.dart';
+import 'content_source.dart';
+import 'local_content_source.dart';
+import 'remote_content_source.dart';
 
-class ApiService {
-  late Dio _dio;
+/// Where the app gets its catalog from.
+enum ContentMode {
+  /// The YouFree API server (FastAPI + yt-dlp) resolves everything.
+  api,
 
-  ApiService(String baseUrl) {
-    _rebuildDio(baseUrl);
-  }
+  /// The app resolves everything on-device, no server needed.
+  local,
+}
 
-  void _rebuildDio(String baseUrl) {
-    _dio = Dio(BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: ApiConstants.connectionTimeout,
-      receiveTimeout: ApiConstants.receiveTimeout,
-      headers: {'Content-Type': 'application/json'},
-    ));
-    _dio.interceptors.add(LogInterceptor(
-      requestBody: false,
-      responseBody: false,
-      requestHeader: false,
-      responseHeader: false,
-    ));
-  }
+/// Single entry point the rest of the app talks to.
+///
+/// It forwards every call to whichever [ContentSource] the user picked in
+/// Settings, so switching modes never invalidates the object graph built in
+/// `main.dart`.
+class ApiService implements ContentSource {
+  final RemoteContentSource _remote;
+  final LocalContentSource _local;
 
-  void updateBaseUrl(String baseUrl) => _rebuildDio(baseUrl);
+  ContentMode _mode;
 
-  static Future<bool> checkConnection(String url) async {
-    final dio = Dio(BaseOptions(
-      baseUrl: url,
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-    ));
-    try {
-      final response = await dio.get(ApiConstants.statusEndpoint);
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    } finally {
-      dio.close();
-    }
-  }
+  ApiService(String baseUrl, {ContentMode mode = ContentMode.local})
+      : _remote = RemoteContentSource(baseUrl),
+        _local = LocalContentSource(),
+        _mode = mode;
 
-  Future<List<VideoModel>> search(String query, {int offset = 0}) async {
-    try {
-      final response = await _dio.post(
-        ApiConstants.searchEndpoint,
-        data: {'query': query, 'offset': offset},
-      );
-      if (response.statusCode == 200) {
-        final results = response.data['results'] as List;
-        return results.map((e) => VideoModel.fromJson(e)).toList();
-      }
-      return [];
-    } catch (e) {
-      throw Exception('Failed to search: $e');
-    }
-  }
+  ContentMode get mode => _mode;
 
-  Future<StreamInfo> getStreamInfo(String videoId, {String format = 'audio'}) async {
-    try {
-      final response = await _dio.post(
-        ApiConstants.streamEndpoint,
-        data: {'video_id': videoId, 'format': format},
-      );
-      if (response.statusCode == 200) return StreamInfo.fromJson(response.data);
-      throw Exception('Failed to get stream info');
-    } catch (e) {
-      throw Exception('Failed to get stream: $e');
-    }
-  }
+  bool get isLocal => _mode == ContentMode.local;
 
+  set mode(ContentMode value) => _mode = value;
+
+  ContentSource get _source => isLocal ? _local : _remote;
+
+  void updateBaseUrl(String baseUrl) => _remote.updateBaseUrl(baseUrl);
+
+  static Future<bool> checkConnection(String url) =>
+      RemoteContentSource.checkConnection(url);
+
+  @override
+  Future<List<VideoModel>> search(String query, {int offset = 0}) =>
+      _source.search(query, offset: offset);
+
+  @override
+  Future<StreamInfo> getStreamInfo(String videoId, {String format = 'audio'}) =>
+      _source.getStreamInfo(videoId, format: format);
+
+  @override
   Future<List<VideoModel>> getSuggestions(
     String videoId, {
     String title = '',
     String uploader = '',
-  }) async {
-    try {
-      final response = await _dio.post(
-        ApiConstants.suggestionsEndpoint,
-        data: {'video_id': videoId, 'title': title, 'uploader': uploader},
-      );
-      if (response.statusCode == 200) {
-        final results = response.data['results'] as List;
-        return results.map((e) => VideoModel.fromJson(e as Map<String, dynamic>)).toList();
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
+  }) =>
+      _source.getSuggestions(videoId, title: title, uploader: uploader);
 
-  Future<CollectionModel> getPlaylist(String url) async {
-    try {
-      final response = await _dio.post(ApiConstants.playlistEndpoint, data: {'url': url});
-      if (response.statusCode == 200) return CollectionModel.fromJson(response.data);
-      throw Exception('Falha ao carregar playlist');
-    } catch (e) {
-      throw Exception('Falha ao carregar playlist: $e');
-    }
-  }
+  @override
+  Future<CollectionModel> getPlaylist(String url) => _source.getPlaylist(url);
 
-  Future<CollectionModel> getChannel(String url) async {
-    try {
-      final response = await _dio.post(ApiConstants.channelEndpoint, data: {'url': url});
-      if (response.statusCode == 200) return CollectionModel.fromJson(response.data);
-      throw Exception('Falha ao carregar canal');
-    } catch (e) {
-      throw Exception('Falha ao carregar canal: $e');
-    }
-  }
+  @override
+  Future<CollectionModel> getChannel(String url) => _source.getChannel(url);
 
-  Future<List<ChannelInfo>> searchChannels(String query) async {
-    try {
-      final response = await _dio.post(ApiConstants.searchChannelsEndpoint, data: {'query': query});
-      if (response.statusCode == 200) {
-        final results = response.data['channels'] as List;
-        return results.map((e) => ChannelInfo.fromJson(e as Map<String, dynamic>)).toList();
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
+  @override
+  Future<List<ChannelInfo>> searchChannels(String query) =>
+      _source.searchChannels(query);
 
-  Future<List<PlaylistPreview>> searchPlaylists(String query) async {
-    try {
-      final response = await _dio.post(ApiConstants.searchPlaylistsEndpoint, data: {'query': query});
-      if (response.statusCode == 200) {
-        final results = response.data['playlists'] as List;
-        return results.map((e) => PlaylistPreview.fromJson(e as Map<String, dynamic>)).toList();
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
+  @override
+  Future<List<PlaylistPreview>> searchPlaylists(String query) =>
+      _source.searchPlaylists(query);
 
-  Future<List<VideoModel>> getHomeFeed() async {
-    try {
-      final response = await _dio.get(ApiConstants.homeFeedEndpoint);
-      if (response.statusCode == 200) {
-        final results = response.data['results'] as List;
-        return results.map((e) => VideoModel.fromJson(e as Map<String, dynamic>)).toList();
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
+  @override
+  Future<List<VideoModel>> getHomeFeed() => _source.getHomeFeed();
 
-  Future<Map<String, dynamic>> getStatus() async {
-    try {
-      final response = await _dio.get(ApiConstants.statusEndpoint);
-      if (response.statusCode == 200) return Map<String, dynamic>.from(response.data as Map);
-      return {};
-    } catch (_) {
-      return {};
-    }
-  }
+  @override
+  Future<List<VideoModel>> getGenre(String hashtag) => _source.getGenre(hashtag);
 
-  Future<bool> uploadCookies(String content) async {
-    try {
-      final response = await _dio.post(ApiConstants.cookiesEndpoint, data: {'content': content});
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
-  }
+  @override
+  Future<List<String>> getSearchSuggestions(String query) =>
+      _source.getSearchSuggestions(query);
 
-  Future<bool> deleteCookies() async {
-    try {
-      final response = await _dio.delete(ApiConstants.cookiesEndpoint);
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
-  }
+  @override
+  Future<Map<String, dynamic>> getLyrics(String title, String artist) =>
+      _source.getLyrics(title, artist);
 
-  Future<void> prefetch(List<String> videoIds) async {
-    try {
-      await _dio.post('/prefetch', data: {'video_ids': videoIds});
-    } catch (_) {}
-  }
+  @override
+  Future<Map<String, dynamic>> getStatus() => _source.getStatus();
 
-  Future<List<String>> getSearchSuggestions(String query) async {
-    try {
-      final response = await _dio.get(
-        '/suggest',
-        queryParameters: {'q': query},
-        options: Options(receiveTimeout: const Duration(seconds: 4)),
-      );
-      if (response.statusCode == 200) {
-        return List<String>.from(response.data['suggestions'] ?? []);
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
+  @override
+  Future<bool> uploadCookies(String content) => _source.uploadCookies(content);
 
-  Future<Map<String, dynamic>> getLyrics(String title, String artist) async {
-    try {
-      final response = await _dio.get(
-        ApiConstants.lyricsEndpoint,
-        queryParameters: {'title': title, 'artist': artist},
-        options: Options(receiveTimeout: const Duration(seconds: 10)),
-      );
-      if (response.statusCode == 200) return Map<String, dynamic>.from(response.data as Map);
-      return {'found': false};
-    } catch (_) {
-      return {'found': false};
-    }
-  }
+  @override
+  Future<bool> deleteCookies() => _source.deleteCookies();
 
-  Future<List<VideoModel>> getGenre(String hashtag) async {
-    try {
-      final response = await _dio.get('${ApiConstants.genreEndpoint}/$hashtag');
-      if (response.statusCode == 200) {
-        final results = response.data['results'] as List;
-        return results.map((e) => VideoModel.fromJson(e as Map<String, dynamic>)).toList();
-      }
-      return [];
-    } catch (_) {
-      return [];
-    }
-  }
+  @override
+  Future<void> prefetch(List<String> videoIds) => _source.prefetch(videoIds);
 }

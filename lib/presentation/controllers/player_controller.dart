@@ -5,6 +5,7 @@ import 'package:video_player/video_player.dart';
 import 'dart:async';
 import '../../data/models/video_model.dart';
 import '../../data/repositories/video_repository.dart';
+import '../../data/services/youtube/chunked_audio_source.dart';
 import '../../data/services/history_service.dart';
 import '../../data/services/audio_handler.dart';
 import '../../data/services/download_manager.dart';
@@ -208,6 +209,29 @@ abstract class _PlayerController with Store {
 
   // Pre-fetches audio URLs for the next [count] songs into local cache in parallel
   // and tells the server to warm its cache for double that window.
+  /// Locally-resolved CDN URLs only answer bounded range requests, so they get
+  /// a chunked source; API-resolved URLs keep the caching source they had.
+  AudioSource _buildAudioSource(StreamFormat format) {
+    final size = format.filesize;
+    if (_repository.isLocalSource && size != null && size > 0) {
+      return ChunkedAudioSource(
+        url: format.url,
+        sourceLength: size,
+        contentType: _contentTypeFor(format.ext),
+      );
+    }
+    // ignore: experimental_member_use
+    return LockCachingAudioSource(Uri.parse(format.url));
+  }
+
+  String _contentTypeFor(String ext) => switch (ext) {
+        'm4a' || 'mp4' => 'audio/mp4',
+        'webm' || 'opus' => 'audio/webm',
+        'mp3' => 'audio/mpeg',
+        'ogg' => 'audio/ogg',
+        _ => 'audio/mp4',
+      };
+
   void _prefetchAhead(int count) {
     if (suggestions.isEmpty) return;
     final songs = suggestions.take(count).toList();
@@ -269,8 +293,7 @@ abstract class _PlayerController with Store {
           isLoading = false;
           return;
         }
-        // ignore: experimental_member_use
-        audioSource = LockCachingAudioSource(Uri.parse(format.url));
+        audioSource = _buildAudioSource(format);
       }
 
       await _handler.playNow(
@@ -392,8 +415,7 @@ abstract class _PlayerController with Store {
           runInAction(() { errorMessage = 'Formato de áudio não encontrado'; isLoading = false; });
           return;
         }
-        // ignore: experimental_member_use
-        audioSource = LockCachingAudioSource(Uri.parse(format.url));
+        audioSource = _buildAudioSource(format);
       }
 
       await _handler.playNow(
@@ -478,8 +500,7 @@ abstract class _PlayerController with Store {
           });
           return;
         }
-        // ignore: experimental_member_use
-        audioSource = LockCachingAudioSource(Uri.parse(format.url));
+        audioSource = _buildAudioSource(format);
       }
 
       await _handler.playNow(

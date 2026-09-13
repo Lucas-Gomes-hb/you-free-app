@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/video_model.dart';
 import 'api_service.dart';
 import 'playlist_service.dart';
+import 'youtube/chunked_stream.dart';
 
 enum DownloadStatus { none, downloading, done, error }
 
@@ -23,6 +24,7 @@ class DownloadManager extends ChangeNotifier {
   final ApiService _apiService;
   final PlaylistService _playlistService;
   final Dio _dio = Dio();
+  final ChunkedStream _chunks = ChunkedStream();
 
   final Map<String, DownloadInfo> _downloads = {};
   final Map<String, CancelToken> _tokens = {};
@@ -131,16 +133,22 @@ class DownloadManager extends ChangeNotifier {
       final token = CancelToken();
       _tokens[id] = token;
 
-      await _dio.download(
-        format.url,
-        path,
-        cancelToken: token,
-        onReceiveProgress: (received, total) {
-          if (total > 0) {
-            _set(id, DownloadInfo(DownloadStatus.downloading, received / total));
-          }
-        },
-      );
+      if (_apiService.isLocal) {
+        // Locally-resolved URLs reject whole-file requests; read them in the
+        // same bounded chunks the player uses.
+        await _downloadChunked(id, format, path, token);
+      } else {
+        await _dio.download(
+          format.url,
+          path,
+          cancelToken: token,
+          onReceiveProgress: (received, total) {
+            if (total > 0) {
+              _set(id, DownloadInfo(DownloadStatus.downloading, received / total));
+            }
+          },
+        );
+      }
 
       _tokens.remove(id);
       _set(id, DownloadInfo(DownloadStatus.done, 1.0, path));
@@ -156,6 +164,37 @@ class DownloadManager extends ChangeNotifier {
       } else {
         _set(id, const DownloadInfo(DownloadStatus.error));
       }
+    }
+  }
+
+  Future<void> _downloadChunked(
+    String id,
+    StreamFormat format,
+    String path,
+    CancelToken token,
+  ) async {
+    final total = format.filesize ?? await _chunks.length(format.url, cancelToken: token);
+    if (total == null || total <= 0) {
+      throw Exception('Tamanho do stream desconhecido');
+    }
+
+    final file = File(path);
+    await file.parent.create(recursive: true);
+    final sink = file.openWrite();
+    var received = 0;
+    try {
+      await for (final chunk in _chunks.read(format.url, 0, total, cancelToken: token)) {
+        sink.add(chunk);
+        received += chunk.length;
+        _set(id, DownloadInfo(DownloadStatus.downloading, received / total));
+      }
+    } finally {
+      await sink.close();
+    }
+
+    if (received < total) {
+      await file.delete();
+      throw Exception('Download incompleto');
     }
   }
 
