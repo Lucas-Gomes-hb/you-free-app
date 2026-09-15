@@ -3,6 +3,7 @@ import '../models/collection_model.dart';
 import 'content_source.dart';
 import 'local_content_source.dart';
 import 'remote_content_source.dart';
+import 'youtube/youtube_js_engine.dart';
 
 /// Where the app gets its catalog from.
 enum ContentMode {
@@ -26,7 +27,7 @@ class ApiService implements ContentSource {
 
   ApiService(String baseUrl, {ContentMode mode = ContentMode.local})
       : _remote = RemoteContentSource(baseUrl),
-        _local = LocalContentSource(),
+        _local = LocalContentSource(jsEngine: YoutubeJsEngine()),
         _mode = mode;
 
   ContentMode get mode => _mode;

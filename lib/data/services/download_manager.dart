@@ -23,7 +23,6 @@ class DownloadInfo {
 class DownloadManager extends ChangeNotifier {
   final ApiService _apiService;
   final PlaylistService _playlistService;
-  final Dio _dio = Dio();
   final ChunkedStream _chunks = ChunkedStream();
 
   final Map<String, DownloadInfo> _downloads = {};
@@ -133,22 +132,10 @@ class DownloadManager extends ChangeNotifier {
       final token = CancelToken();
       _tokens[id] = token;
 
-      if (_apiService.isLocal) {
-        // Locally-resolved URLs reject whole-file requests; read them in the
-        // same bounded chunks the player uses.
-        await _downloadChunked(id, format, path, token);
-      } else {
-        await _dio.download(
-          format.url,
-          path,
-          cancelToken: token,
-          onReceiveProgress: (received, total) {
-            if (total > 0) {
-              _set(id, DownloadInfo(DownloadStatus.downloading, received / total));
-            }
-          },
-        );
-      }
+      // YouTube CDN URLs reject or truncate whole-file requests regardless of
+      // where they were resolved; read them in the same bounded chunks the
+      // player uses.
+      await _downloadChunked(id, format, path, token);
 
       _tokens.remove(id);
       _set(id, DownloadInfo(DownloadStatus.done, 1.0, path));

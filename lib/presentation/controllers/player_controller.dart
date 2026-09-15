@@ -209,11 +209,13 @@ abstract class _PlayerController with Store {
 
   // Pre-fetches audio URLs for the next [count] songs into local cache in parallel
   // and tells the server to warm its cache for double that window.
-  /// Locally-resolved CDN URLs only answer bounded range requests, so they get
-  /// a chunked source; API-resolved URLs keep the caching source they had.
+  /// YouTube CDN URLs only answer bounded range requests — an open-ended one
+  /// stalls and is truncated mid-file — so they get a chunked source whenever
+  /// the size is known. Without a size there is no range to bound, and the
+  /// caching source is the only option left.
   AudioSource _buildAudioSource(StreamFormat format) {
     final size = format.filesize;
-    if (_repository.isLocalSource && size != null && size > 0) {
+    if (size != null && size > 0) {
       return ChunkedAudioSource(
         url: format.url,
         sourceLength: size,
@@ -595,7 +597,12 @@ abstract class _PlayerController with Store {
         return;
       }
 
-      final vc = VideoPlayerController.networkUrl(Uri.parse(streamInfo.videoUrl!));
+      // The HLS master manifest has no .m3u8 extension, so the player cannot
+      // infer its type — the hint is what keeps adaptive streams playable.
+      final vc = VideoPlayerController.networkUrl(
+        Uri.parse(streamInfo.videoUrl!),
+        formatHint: streamInfo.videoFormat == 'hls' ? VideoFormat.hls : null,
+      );
       await vc.initialize();
       await vc.seekTo(savedPosition);
       vc.addListener(_onVideoUpdate);

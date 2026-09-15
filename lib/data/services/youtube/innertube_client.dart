@@ -10,7 +10,7 @@ import 'package:dio/dio.dart';
 ///   * [android]   — playlist fallback, which returns `playlistVideoRenderer`
 ///                   instead of the newer lockup view models.
 class InnertubeClient {
-  static const _base = 'https://www.youtube.com/youtubei/v1';
+  static const _defaultHost = 'www.youtube.com';
 
   static const _webUa =
       'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -20,6 +20,21 @@ class InnertubeClient {
   static const _androidUa = 'com.google.android.youtube/20.10.38 (Linux; U; Android 12)';
   static const _iosUa =
       'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X)';
+
+  /// YouTube Music. The only identity whose streams the CDN still serves in
+  /// full, and the reason [YoutubeJsEngine] exists: it hands back ciphered
+  /// signatures and demands a proof-of-origin token on the stream URL.
+  static const webRemix = InnertubeIdentity(
+    name: 'WEB_REMIX',
+    version: '1.20260908.14.00',
+    userAgent: _webUa,
+    id: 67,
+    host: 'music.youtube.com',
+    context: {
+      'clientName': 'WEB_REMIX',
+      'clientVersion': '1.20260908.14.00',
+    },
+  );
 
   static const web = InnertubeIdentity(
     name: 'WEB',
@@ -114,7 +129,7 @@ class InnertubeClient {
     };
 
     final response = await _dio.post<dynamic>(
-      '$_base/$endpoint',
+      'https://${client.host}/youtubei/v1/$endpoint',
       queryParameters: const {'prettyPrint': 'false'},
       data: payload,
       options: Options(headers: {
@@ -122,6 +137,7 @@ class InnertubeClient {
         'User-Agent': client.userAgent,
         'X-YouTube-Client-Name': '${client.id}',
         'X-YouTube-Client-Version': client.version,
+        'Origin': 'https://${client.host}',
         if (visitorData != null) 'X-Goog-Visitor-Id': visitorData,
       }),
     );
@@ -147,7 +163,7 @@ class InnertubeClient {
   Future<String?> _fetchVisitor() async {
     try {
       final response = await _dio.post<dynamic>(
-        '$_base/visitor_id',
+        'https://$_defaultHost/youtubei/v1/visitor_id',
         queryParameters: const {'prettyPrint': 'false'},
         data: {
           'context': {
@@ -180,11 +196,15 @@ class InnertubeIdentity {
   final int id;
   final Map<String, dynamic> context;
 
+  /// InnerTube host this identity talks to; YouTube Music has its own.
+  final String host;
+
   const InnertubeIdentity({
     required this.name,
     required this.version,
     required this.userAgent,
     required this.id,
     required this.context,
+    this.host = InnertubeClient._defaultHost,
   });
 }

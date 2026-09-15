@@ -8,6 +8,7 @@ import '../models/collection_model.dart';
 import 'content_source.dart';
 import 'lyrics_service.dart';
 import 'youtube/innertube_client.dart';
+import 'youtube/youtube_js_runtime.dart';
 import 'youtube/innertube_parser.dart';
 
 /// On-device replacement for the YouFree API server.
@@ -40,6 +41,9 @@ class LocalContentSource implements ContentSource {
   ];
 
   final InnertubeClient _tube;
+  /// Absent on platforms or tests without a WebView; the music path is then
+  /// skipped and only the tokenless clients are tried.
+  final YoutubeJsRuntime? _js;
   final Dio _plain;
 
   final Map<String, _CacheEntry<StreamInfo>> _streamCache = {};
@@ -49,8 +53,9 @@ class LocalContentSource implements ContentSource {
 
   _CacheEntry<List<VideoModel>>? _homeFeed;
 
-  LocalContentSource({InnertubeClient? client})
+  LocalContentSource({InnertubeClient? client, YoutubeJsRuntime? jsEngine})
       : _tube = client ?? InnertubeClient(),
+        _js = jsEngine,
         _plain = Dio(BaseOptions(
           connectTimeout: const Duration(seconds: 8),
           receiveTimeout: const Duration(seconds: 8),
@@ -161,6 +166,24 @@ class LocalContentSource implements ContentSource {
     // `signatureCipher`, which would need a JS engine on-device. ANDROID_VR
     // comes first because it is the only one carrying muxed (video+audio)
     // formats, and IOS covers the videos where ANDROID_VR hits a bot check.
+    // YouTube Music first: it is the only client the CDN still serves whole,
+    // at the cost of running JavaScript for the signature and the token.
+    if (format != 'video' && _js != null) {
+      try {
+        final info = await _resolveViaMusic(videoId);
+        // ignore: avoid_print
+        print('YouFree: caminho music -> ${info == null ? "nulo" : "ok"}');
+        if (info != null) {
+          _cacheStream(cacheKey, info);
+          return info;
+        }
+      } catch (e) {
+        // ignore: avoid_print
+        print('YouFree: caminho music falhou -> $e');
+        // Falls through to the tokenless clients below.
+      }
+    }
+
     String? lastReason;
     var loginRequired = false;
 
@@ -254,6 +277,115 @@ class LocalContentSource implements ContentSource {
       return false;
     } finally {
       cancelToken.cancel();
+    }
+  }
+
+  /// Resolves through the WEB_REMIX (YouTube Music) client.
+  ///
+  /// Three pieces have to line up: the player script's signature timestamp,
+  /// which the player request is rejected without; the descrambled signature
+  /// and `n` parameter; and a proof-of-origin token bound to the video id.
+  /// Miss any one and the CDN serves only the first megabyte.
+  Future<StreamInfo?> _resolveViaMusic(String videoId) async {
+    final js = _js!;
+    final signatureTimestamp = await js.prepare();
+
+    final response = await _tube.call(
+      'player',
+      {
+        'videoId': videoId,
+        'contentCheckOk': true,
+        'racyCheckOk': true,
+        'playbackContext': {
+          'contentPlaybackContext': {
+            'html5Preference': 'HTML5_PREF_WANTS',
+            'signatureTimestamp': signatureTimestamp,
+          },
+        },
+      },
+      client: InnertubeClient.webRemix,
+    );
+
+    final status = response['playabilityStatus'];
+    if (status is Map && status['status'] != 'OK') return null;
+
+    final streaming = (response['streamingData'] as Map?) ?? const {};
+    final adaptive = streaming['adaptiveFormats'];
+    if (adaptive is! List) return null;
+
+    final audio = adaptive
+        .whereType<Map>()
+        .where((f) => '${f['mimeType'] ?? ''}'.startsWith('audio'))
+        .toList()
+      ..sort((a, b) =>
+          ((b['bitrate'] as num?) ?? 0).compareTo((a['bitrate'] as num?) ?? 0));
+    if (audio.isEmpty) return null;
+
+    final poToken = await js.mintPoToken(videoId);
+
+    final formats = <Map<String, dynamic>>[];
+    for (final format in audio) {
+      final url = await _playableUrl(js, format, poToken);
+      if (url == null) continue;
+      formats.add({
+        'format_id': '${format['itag'] ?? ''}',
+        'url': url,
+        'ext': _extFor('${format['mimeType'] ?? ''}'),
+        'quality': format['audioQuality'] ?? '${format['bitrate'] ?? ''}',
+        'filesize': int.tryParse('${format['contentLength'] ?? ''}'),
+        'is_audio_only': true,
+      });
+      // The rest of the list is only ever used as a fallback, and each entry
+      // costs a signature round trip through the WebView.
+      if (formats.length >= 2) break;
+    }
+    if (formats.isEmpty) return null;
+
+    // ignore: avoid_print
+    print('YouFree: music resolveu ${formats.length} formato(s); '
+        'fim do arquivo -> ${await _isPlayable(formats.first['url'] as String, formats.first['filesize'] as int?) ? 'OK' : 'RECUSADO'}');
+
+    final details = (response['videoDetails'] as Map?) ?? const {};
+    return StreamInfo.fromJson({
+      'title': details['title'] ?? '',
+      'thumbnail': InnertubeParser.bestThumb(
+        InnertubeParser.largestImage(details['thumbnail']),
+        videoId,
+      ),
+      'duration': int.tryParse('${details['lengthSeconds'] ?? ''}'),
+      'uploader': details['author'],
+      'formats': formats,
+      'video_url': null,
+    });
+  }
+
+  /// Turns one WEB_REMIX format into a URL the CDN accepts.
+  Future<String?> _playableUrl(
+      YoutubeJsRuntime js, Map format, String poToken) async {
+    try {
+      var url = format['url'] as String?;
+
+      final cipher = format['signatureCipher'] as String?;
+      if (cipher != null) {
+        final parts = Uri.splitQueryString(cipher);
+        final base = parts['url'];
+        final scrambled = parts['s'];
+        if (base == null || scrambled == null) return null;
+        final signature = await js.solveSignature(scrambled);
+        url = '$base&${parts['sp'] ?? 'sig'}=${Uri.encodeQueryComponent(signature)}';
+      }
+      if (url == null) return null;
+
+      final parsed = Uri.parse(url);
+      final query = Map<String, String>.from(parsed.queryParameters);
+
+      final n = query['n'];
+      if (n != null) query['n'] = await js.solveN(n);
+      query['pot'] = poToken;
+
+      return parsed.replace(queryParameters: query).toString();
+    } catch (_) {
+      return null;
     }
   }
 

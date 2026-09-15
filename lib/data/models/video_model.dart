@@ -82,6 +82,10 @@ class StreamInfo {
   final List<StreamFormat> formats;
   final String? videoUrl;
 
+  /// How [videoUrl] must be played: 'progressive' for a single mp4, 'hls' for
+  /// the master manifest YouTube serves when only adaptive streams exist.
+  final String? videoFormat;
+
   StreamInfo({
     required this.title,
     this.thumbnail,
@@ -89,6 +93,7 @@ class StreamInfo {
     this.uploader,
     required this.formats,
     this.videoUrl,
+    this.videoFormat,
   });
 
   factory StreamInfo.fromJson(Map<String, dynamic> json) {
@@ -101,6 +106,7 @@ class StreamInfo {
           ?.map((e) => StreamFormat.fromJson(e))
           .toList() ?? [],
       videoUrl: json['video_url'],
+      videoFormat: json['video_format'],
     );
   }
 
