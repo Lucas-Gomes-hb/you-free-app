@@ -24,6 +24,9 @@ dependencies:
 
   # Video Player
   video_player: ^2.9.1
+  # Video player for the Watch page: ExoPlayer under the hood, so it can switch
+  # quality, enter Picture-in-Picture and go fullscreen without extra platform work.
+  better_player: ^1.18.0
   
   # Navigation
   go_router: ^13.2.0

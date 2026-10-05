@@ -20,6 +20,9 @@ import com.ryanheise.audioservice.AudioServiceActivity
 class MainActivity : AudioServiceActivity() {
     private var pipChannel: MethodChannel? = null
     private var isPlaying = false
+    // Set by Flutter while a video plays on the Watch page: leaving the app then
+    // drops into Picture-in-Picture instead of stopping playback.
+    private var autoPip = false
 
     companion object {
         private const val ACTION_PIP_CONTROL = "com.example.youfree.pip.CONTROL"
@@ -51,6 +54,10 @@ class MainActivity : AudioServiceActivity() {
                     } else {
                         result.error("UNSUPPORTED", "PiP requires Android 8+", null)
                     }
+                }
+                "setAutoPip" -> {
+                    autoPip = call.arguments as? Boolean ?: false
+                    result.success(null)
                 }
                 "updatePipState" -> {
                     isPlaying = call.arguments as? Boolean ?: false
@@ -101,6 +108,13 @@ class MainActivity : AudioServiceActivity() {
             ))
         }
         enterPictureInPictureMode(builder.build())
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (autoPip && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isInPictureInPictureMode) {
+            enterPip(null)
+        }
     }
 
     override fun onResume() {

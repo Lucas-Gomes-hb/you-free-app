@@ -12,6 +12,11 @@ class ApiConstants {
   static const String cookiesEndpoint = '/cookies';
   static const String genreEndpoint = '/genre';
   static const String lyricsEndpoint = '/lyrics';
+  static const String videoDetailsEndpoint = '/video_details';
+  static const String relatedEndpoint = '/related';
+  static const String commentsEndpoint = '/comments';
+  static const String searchVideosEndpoint = '/search_videos';
+  static const String searchFiltersEndpoint = '/search_filters';
 
   static const Duration connectionTimeout = Duration(seconds: 15);
   static const Duration receiveTimeout = Duration(seconds: 60);

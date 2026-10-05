@@ -13,6 +13,45 @@ subprojects {
     project.evaluationDependsOn(':app')
 }
 
+// AGP 8 requires every module to declare a namespace, and some plugins still
+// only carry the package in their manifest. It is only a last resort for
+// modules that declare neither.
+subprojects { project ->
+    project.plugins.withId('com.android.library') {
+        if (project.android.namespace == null) {
+            def manifest = project.file('src/main/AndroidManifest.xml')
+            if (manifest.exists()) {
+                def pkg = new XmlSlurper().parse(manifest).@package.text()
+                if (pkg) {
+                    project.android.namespace = pkg
+                }
+            }
+        }
+    }
+}
+
+// better_player_android asks for Java 21 class files, but this machine only
+// has a 17 JDK, and javac refuses to read a newer class than its own target.
+// Its sources are plain Kotlin/media3, so they build fine at 17.
+//
+// afterEvaluate, not withId: the plugin's own android { } block runs later and
+// would otherwise put 21 back after the hook fired.
+subprojects { project ->
+    if (project.name.startsWith('better_player')) {
+        project.afterEvaluate {
+            project.android.compileOptions.sourceCompatibility = JavaVersion.VERSION_17
+            project.android.compileOptions.targetCompatibility = JavaVersion.VERSION_17
+            // The plugin pins Kotlin to 21 independently, and AGP refuses a
+            // Java/Kotlin target mismatch, so both have to be lowered together.
+            def kotlinExt = project.extensions.findByName('kotlin')
+            if (kotlinExt != null) {
+                kotlinExt.compilerOptions.jvmTarget =
+                    org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+            }
+        }
+    }
+}
+
 tasks.register("clean", Delete) {
     delete rootProject.layout.buildDirectory
 }

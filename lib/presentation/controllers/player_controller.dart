@@ -10,7 +10,6 @@ import '../../data/services/history_service.dart';
 import '../../data/services/audio_handler.dart';
 import '../../data/services/download_manager.dart';
 import '../../data/services/progress_service.dart';
-import '../../data/services/lyrics_service.dart';
 import '../../data/services/repertoire_service.dart';
 
 part 'player_controller.g.dart';

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
+import '../models/comment_model.dart';
 import '../models/video_model.dart';
 import '../models/collection_model.dart';
 import 'content_source.dart';
@@ -10,6 +11,7 @@ import 'lyrics_service.dart';
 import 'youtube/innertube_client.dart';
 import 'youtube/youtube_js_runtime.dart';
 import 'youtube/innertube_parser.dart';
+import '../models/search_filter_option.dart';
 
 /// On-device replacement for the YouFree API server.
 ///
@@ -46,12 +48,34 @@ class LocalContentSource implements ContentSource {
   final YoutubeJsRuntime? _js;
   final Dio _plain;
 
+  /// Whether music-only filtering applies. Video mode must disable it, or a
+  /// 1:1 YouTube is unreachable: long lectures, streams and unlisted videos
+  /// are all legitimate content there.
+  bool _musicFilter = true;
+
+  /// Flips the catalog rules to match the active [AppMode]. The stream cache
+  /// is deliberately left alone — a resolved URL stays valid across modes.
+  void setMusicFilter(bool enabled) => _musicFilter = enabled;
+
+  /// Video mode has no music-only filter, so every result is eligible.
+  Iterable<VideoModel> _applyFilter(Iterable<VideoModel> videos) =>
+      _musicFilter ? videos.where(_isMusic) : videos;
+
   final Map<String, _CacheEntry<StreamInfo>> _streamCache = {};
   final Map<String, String> _searchContinuations = {};
   final Map<String, _CacheEntry<List<VideoModel>>> _genreCache = {};
+  final Map<String, _CacheEntry<List<VideoModel>>> _homeFeed = {};
+  final Map<String, _CacheEntry<VideoDetails>> _detailsCache = {};
+  final Map<String, _CacheEntry<List<SearchFilterOption>>> _filterOptions = {};
   final Set<String> _prefetching = {};
 
-  _CacheEntry<List<VideoModel>>? _homeFeed;
+  /// Watch-page metadata rarely changes and is expensive to refetch, so it is
+  /// kept much longer than the feed.
+  static const _detailsTtl = Duration(hours: 6);
+  static const _filterTtl = Duration(minutes: 30);
+
+  /// Distinguishes the two modes' home feeds in [_homeFeed].
+  String get _homeFeedKey => _musicFilter ? 'music' : 'video';
 
   LocalContentSource({InnertubeClient? client, YoutubeJsRuntime? jsEngine})
       : _tube = client ?? InnertubeClient(),
@@ -556,10 +580,12 @@ class LocalContentSource implements ContentSource {
       'playlistId': 'RD$videoId',
     });
 
-    return InnertubeParser.videosFrom(
-      response['contents'],
-      seen: {videoId},
-    ).where(_isMusic).take(20).toList();
+    return _applyFilter(
+      InnertubeParser.videosFrom(
+        response['contents'],
+        seen: {videoId},
+      ),
+    ).take(20).toList();
   }
 
   Future<List<VideoModel>> _textSuggestions(
@@ -574,18 +600,18 @@ class LocalContentSource implements ContentSource {
     if (artist != null) {
       final byArtist = await _tube.call('search', {'query': artist});
       results.addAll(
-        InnertubeParser.videosFrom(byArtist['contents'], seen: seen)
-            .where(_isMusic)
-            .take(8),
+        _applyFilter(
+          InnertubeParser.videosFrom(byArtist['contents'], seen: seen),
+        ).take(8),
       );
     }
 
     final query = _cleanSuggestionQuery(title, uploader);
     final byTitle = await _tube.call('search', {'query': query});
     results.addAll(
-      InnertubeParser.videosFrom(byTitle['contents'], seen: seen)
-          .where(_isMusic)
-          .take(15 - results.length),
+      _applyFilter(
+        InnertubeParser.videosFrom(byTitle['contents'], seen: seen),
+      ).take(15 - results.length),
     );
 
     return results;
@@ -685,43 +711,53 @@ class LocalContentSource implements ContentSource {
 
   @override
   Future<List<VideoModel>> getHomeFeed() async {
-    final cached = _homeFeed;
+    // Keyed by filter state: switching modes must not serve the other mode's
+    // cached feed.
+    final key = _homeFeedKey;
+    final cached = _homeFeed[key];
     if (cached != null && !cached.isExpired(_feedTtl)) return cached.value;
 
     var videos = <VideoModel>[];
     try {
-      // RDMM is YouTube's "My Mix" radio — the same seed the server used.
-      final response = await _tube.call('next', {'playlistId': 'RDMM'});
-      videos = InnertubeParser.videosFrom(response['contents'])
-          .where(_isMusic)
-          .take(20)
-          .toList();
+      // RDMM is YouTube's "My Mix" radio — musical by construction, so it is
+      // only the right seed for the music home. Video mode browses the
+      // anonymous home feed instead; phase 5 swaps that for the
+      // authenticated subscriptions feed.
+      final response = _musicFilter
+          ? await _tube.call('next', {'playlistId': 'RDMM'})
+          : await _tube.call('browse', {'browseId': 'FEwhat_to_watch'});
+      videos = _applyFilter(
+        InnertubeParser.videosFrom(response['contents']),
+      ).take(20).toList();
     } catch (_) {}
 
     if (videos.isEmpty) {
       try {
-        videos = (await search('popular music hits')).where(_isMusic).take(20).toList();
+        final seed = _musicFilter ? 'popular music hits' : 'popular';
+        videos = _applyFilter(await search(seed)).take(20).toList();
       } catch (_) {
         return [];
       }
     }
 
-    _homeFeed = _CacheEntry(videos);
+    _homeFeed[key] = _CacheEntry(videos);
     return videos;
   }
 
   @override
   Future<List<VideoModel>> getGenre(String hashtag) async {
-    final key = hashtag.toLowerCase();
+    final key = '${_musicFilter ? 'm' : 'v'}:${hashtag.toLowerCase()}';
     final cached = _genreCache[key];
     if (cached != null && !cached.isExpired(_feedTtl)) return cached.value;
 
     try {
-      final response = await _tube.call('search', {'query': '#$hashtag music'});
+      final response = await _tube.call('search', {
+        'query': _musicFilter ? '#$hashtag music' : '#$hashtag',
+      });
       final all = InnertubeParser.videosFrom(response['contents']);
       // Genres like lofi are mostly hour-long mixes, which the music filter
       // drops; fall back to the raw results rather than showing an empty tab.
-      final filtered = all.where(_isMusic).toList();
+      final filtered = _applyFilter(all).toList();
       final videos = (filtered.length >= 5 ? filtered : all).take(20).toList();
       _genreCache[key] = _CacheEntry(videos);
       return videos;
@@ -832,6 +868,120 @@ class LocalContentSource implements ContentSource {
       if (browseId is String && browseId.startsWith('UC')) return browseId;
     } catch (_) {}
     return null;
+  }
+
+  // ── Video mode ───────────────────────────────────────────────────────────
+
+  @override
+  Future<VideoDetails> getVideoDetails(String videoId) async {
+    final cached = _detailsCache[videoId];
+    if (cached != null && !cached.isExpired(_detailsTtl)) return cached.value;
+
+    // The two endpoints own disjoint halves of the header: `next` carries the
+    // watch renderers (channel, date, like button) while `player` carries the
+    // facts (title, exact duration, view count, full description). `next`
+    // alone has no duration at all, so both are needed; firing them together
+    // keeps the wait to a single round trip.
+    final responses = await Future.wait([
+      _tube.call('next', {'videoId': videoId}),
+      _tube.call('player', {'videoId': videoId}),
+    ]);
+    final details = InnertubeParser.videoDetailsFrom(
+      <String, dynamic>{'next': responses[0], 'player': responses[1]},
+      videoId,
+    );
+    if (details == null) {
+      throw StateError('Não foi possível carregar os detalhes do vídeo');
+    }
+    _detailsCache[videoId] = _CacheEntry(details);
+    return details;
+  }
+
+  @override
+  Future<List<VideoModel>> getRelated(String videoId) async {
+    final response = await _tube.call('next', {'videoId': videoId});
+    // The rail lives under `secondaryResults`, wrapped one level deeper than
+    // `contents`, so the whole payload is handed to the walk.
+    return InnertubeParser.videosFrom(
+      response,
+      seen: {videoId},
+      limit: 20,
+    );
+  }
+
+  @override
+  Future<CommentPage> getComments(
+    String videoId, {
+    String? continuation,
+    CommentSort sort = CommentSort.top,
+  }) async {
+    // The first page never inlines comments: the watch response only carries
+    // the continuation token that boots the comment section, so it always costs
+    // two requests. Later pages post the token straight back.
+    final Map<String, dynamic> response;
+    if (continuation == null) {
+      final watch = await _tube.call('next', {'videoId': videoId});
+      final token = InnertubeParser.continuationToken(watch);
+      if (token == null) return InnertubeParser.commentsFrom(watch);
+      response = await _tube.call('next', {
+        'continuation': token,
+        'currentUrl': 'https://www.youtube.com/watch?v=$videoId',
+      });
+    } else {
+      response = await _tube.call('next', {
+        'continuation': continuation,
+        'currentUrl': 'https://www.youtube.com/watch?v=$videoId',
+      });
+    }
+
+    return InnertubeParser.commentsFrom(response);
+  }
+
+  @override
+  Future<List<VideoModel>> searchVideos(String query, {String? params}) async {
+    final Map<String, dynamic> response;
+    if (params == null || params.isEmpty) {
+      response = await _tube.call('search', {'query': query});
+    } else {
+      response = await _tube.call('search', {
+        'query': query,
+        'params': params,
+      });
+    }
+
+    return InnertubeParser.videosFrom(
+      response['contents'] ?? response['onResponseReceivedCommands'],
+      limit: 30,
+    );
+  }
+
+  @override
+  Future<List<SearchFilterOption>> getSearchFilters(
+    String query, {
+    String? params,
+  }) async {
+    // The filter bar only lists chips that are valid alongside what is already
+    // applied, so it is fetched in the same context as the results and cached
+    // per (query, params).
+    final key = '$query|${params ?? ''}';
+    final cached = _filterOptions[key];
+    if (cached != null && !cached.isExpired(_filterTtl)) return cached.value;
+
+    final Map<String, dynamic> response;
+    if (params == null || params.isEmpty) {
+      response = await _tube.call('search', {'query': query});
+    } else {
+      response = await _tube.call('search', {
+        'query': query,
+        'params': params,
+      });
+    }
+
+    // The chips live under `header`, not `contents`, so the whole payload is
+    // handed over and the parser walks it by key.
+    final options = InnertubeParser.searchFiltersFrom(response);
+    _filterOptions[key] = _CacheEntry(options);
+    return options;
   }
 }
 

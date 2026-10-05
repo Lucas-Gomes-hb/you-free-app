@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../app/app_mode.dart';
 import '../../app/theme.dart';
 import '../../app/theme_controller.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/settings_service.dart';
+import '../../presentation/controllers/home_controller.dart';
 
 class SettingsPage extends StatefulWidget {
   final ApiService apiService;
   final SettingsService settingsService;
   final ThemeController themeController;
+  final HomeController homeController;
 
   const SettingsPage({
     Key? key,
     required this.apiService,
     required this.settingsService,
     required this.themeController,
+    required this.homeController,
   }) : super(key: key);
 
   @override
@@ -35,6 +39,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   late int _autoDownloadLimit;
   late ContentMode _contentMode;
+  late AppMode _appMode;
 
   bool get _isLocal => _contentMode == ContentMode.local;
 
@@ -44,6 +49,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _urlController = TextEditingController(text: widget.settingsService.apiUrl);
     _autoDownloadLimit = widget.settingsService.autoDownloadLimit;
     _contentMode = widget.settingsService.contentMode;
+    _appMode = widget.settingsService.appMode;
     _loadStatus();
   }
 
@@ -145,6 +151,9 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildSectionHeader('Aparência'),
           _buildCard([_buildThemeSection()]),
           const SizedBox(height: 24),
+          _buildSectionHeader('Modo do aplicativo'),
+          _buildCard([_buildAppModeSection()]),
+          const SizedBox(height: 24),
           _buildSectionHeader('Fonte de conteúdo'),
           _buildCard([_buildContentModeSection()]),
           const SizedBox(height: 24),
@@ -153,9 +162,11 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildCard([_buildApiUrlSection()]),
             const SizedBox(height: 24),
           ],
-          _buildSectionHeader('Downloads automáticos'),
-          _buildCard([_buildAutoDownloadSection()]),
-          const SizedBox(height: 24),
+          if (_appMode == AppMode.music) ...[
+            _buildSectionHeader('Downloads automáticos'),
+            _buildCard([_buildAutoDownloadSection()]),
+            const SizedBox(height: 24),
+          ],
           _buildSectionHeader('Autenticação YouTube'),
           _buildCard([_buildCookiesSection()]),
           const SizedBox(height: 24),
@@ -358,6 +369,82 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ── Content mode ──────────────────────────────────────────────────────────
+
+  Widget _buildAppModeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final mode in AppMode.values) ...[
+          if (mode != AppMode.values.first) const SizedBox(height: 8),
+          _buildAppModeOption(mode),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAppModeOption(AppMode mode) {
+    final c = context.c;
+    final selected = _appMode == mode;
+    final accent = mode.accent(c);
+    return InkWell(
+      onTap: () => _setAppMode(mode),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected ? accent.withValues(alpha: 0.10) : c.surfaceHigh,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? accent : c.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(mode.icon, size: 20, color: selected ? accent : c.textMuted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    mode.label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: selected ? accent : c.text,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    mode.description,
+                    style: TextStyle(fontSize: 12, color: c.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              size: 20,
+              color: selected ? accent : c.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setAppMode(AppMode mode) async {
+    setState(() => _appMode = mode);
+    await widget.settingsService.setAppMode(mode);
+    widget.apiService.setAppMode(mode);
+    if (!mounted) return;
+    // The feed is mode-scoped, so drop whatever the previous mode loaded.
+    widget.homeController.clearSearch();
+  }
 
   Widget _buildContentModeSection() {
     return Column(

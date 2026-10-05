@@ -105,6 +105,22 @@ mixin _$HomeController on _HomeController, Store {
     });
   }
 
+  late final _$isLoadingMoreSearchAtom =
+      Atom(name: '_HomeController.isLoadingMoreSearch', context: context);
+
+  @override
+  bool get isLoadingMoreSearch {
+    _$isLoadingMoreSearchAtom.reportRead();
+    return super.isLoadingMoreSearch;
+  }
+
+  @override
+  set isLoadingMoreSearch(bool value) {
+    _$isLoadingMoreSearchAtom.reportWrite(value, super.isLoadingMoreSearch, () {
+      super.isLoadingMoreSearch = value;
+    });
+  }
+
   late final _$errorMessageAtom =
       Atom(name: '_HomeController.errorMessage', context: context);
 
@@ -143,6 +159,14 @@ mixin _$HomeController on _HomeController, Store {
   @override
   Future<void> search() {
     return _$searchAsyncAction.run(() => super.search());
+  }
+
+  late final _$loadMoreSearchAsyncAction =
+      AsyncAction('_HomeController.loadMoreSearch', context: context);
+
+  @override
+  Future<void> loadMoreSearch() {
+    return _$loadMoreSearchAsyncAction.run(() => super.loadMoreSearch());
   }
 
   late final _$searchChannelsAsyncAction =
@@ -214,6 +238,7 @@ videos: ${videos},
 channels: ${channels},
 playlists: ${playlists},
 isLoading: ${isLoading},
+isLoadingMoreSearch: ${isLoadingMoreSearch},
 errorMessage: ${errorMessage},
 recentlyPlayed: ${recentlyPlayed}
     ''';

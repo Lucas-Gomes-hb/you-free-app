@@ -1,9 +1,12 @@
+import '../../app/app_mode.dart';
+import '../models/comment_model.dart';
 import '../models/video_model.dart';
 import '../models/collection_model.dart';
 import 'content_source.dart';
 import 'local_content_source.dart';
 import 'remote_content_source.dart';
 import 'youtube/youtube_js_engine.dart';
+import '../models/search_filter_option.dart';
 
 /// Where the app gets its catalog from.
 enum ContentMode {
@@ -37,6 +40,20 @@ class ApiService implements ContentSource {
   set mode(ContentMode value) => _mode = value;
 
   ContentSource get _source => isLocal ? _local : _remote;
+
+  /// The source the UI builds its pages from, so a page takes a [ContentSource]
+  /// instead of reaching through the service itself.
+  ContentSource get contentSource => _source;
+
+  /// Propagates the app mode to whichever sources filter their catalog by it.
+  void setAppMode(AppMode mode) {
+    _appMode = mode;
+    _local.setMusicFilter(mode == AppMode.music);
+    _remote.appMode = mode;
+  }
+
+  AppMode _appMode = AppMode.music;
+  AppMode get appMode => _appMode;
 
   void updateBaseUrl(String baseUrl) => _remote.updateBaseUrl(baseUrl);
 
@@ -98,4 +115,31 @@ class ApiService implements ContentSource {
 
   @override
   Future<void> prefetch(List<String> videoIds) => _source.prefetch(videoIds);
+
+  @override
+  Future<VideoDetails> getVideoDetails(String videoId) =>
+      _source.getVideoDetails(videoId);
+
+  @override
+  Future<List<VideoModel>> getRelated(String videoId) =>
+      _source.getRelated(videoId);
+
+  @override
+  Future<CommentPage> getComments(
+    String videoId, {
+    String? continuation,
+    CommentSort sort = CommentSort.top,
+  }) =>
+      _source.getComments(videoId, continuation: continuation, sort: sort);
+
+  @override
+  Future<List<VideoModel>> searchVideos(String query, {String? params}) =>
+      _source.searchVideos(query, params: params);
+
+  @override
+  Future<List<SearchFilterOption>> getSearchFilters(
+    String query, {
+    String? params,
+  }) =>
+      _source.getSearchFilters(query, params: params);
 }
